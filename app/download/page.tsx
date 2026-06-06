@@ -1,3 +1,6 @@
+Voici le fichier `app/download/page.tsx` complet corrigé avec toutes les références `ChapCam` → `MirageCam` et les URLs mises à jour :
+
+```typescript
 "use client"
 
 import { motion } from "framer-motion"
@@ -8,9 +11,9 @@ import { Apple, Monitor, ArrowLeft, Download, Shield, Zap, Cpu, CheckCircle } fr
 
 // URLs des fichiers - GitHub Releases v1.0.0
 const DOWNLOAD_URLS = {
-  mac: "https://github.com/meryl225/chapcam-kz/releases/download/v1.0.0/ChapCam-1.0.0.dmg",
-  macArm: "https://github.com/meryl225/chapcam-kz/releases/download/v1.0.0/ChapCam-1.0.0-arm64.dmg",
-  windows: "https://github.com/meryl225/chapcam-kz/releases/download/v1.0.0/ChapCam.Setup.1.0.0.exe",
+  mac: "https://github.com/soulville17/mirargecam/releases/download/v1.0.0/MirageCam-1.0.0.dmg",
+  macArm: "https://github.com/soulville17/mirargecam/releases/download/v1.0.0/MirageCam-1.0.0-arm64.dmg",
+  windows: "https://github.com/soulville17/mirargecam/releases/download/v1.0.0/MirageCam-Setup-1.0.0.exe",
 }
 
 const features = [
@@ -22,7 +25,7 @@ const features = [
   {
     icon: Monitor,
     title: "Camera virtuelle",
-    description: "Utilisez ChapCam dans Zoom, Teams, WhatsApp"
+    description: "Utilisez MirageCam dans Zoom, Teams, WhatsApp"
   },
   {
     icon: Shield,
@@ -81,7 +84,7 @@ export default function DownloadPage() {
             </motion.div>
             
             <h1 className="text-4xl md:text-5xl font-black text-white mb-4">
-              Telecharger <span className="text-[#00ff88]">ChapCam Desktop</span>
+              Telecharger <span className="text-[#00ff88]">MirageCam Desktop</span>
             </h1>
             <p className="text-xl text-gray-400 max-w-2xl mx-auto">
               L&apos;application de face swap en temps reel pour votre ordinateur.
@@ -216,11 +219,11 @@ export default function DownloadPage() {
                   </li>
                   <li className="flex gap-3">
                     <span className="flex-shrink-0 w-6 h-6 bg-[#00ff88] rounded-full flex items-center justify-center text-black text-sm font-bold">2</span>
-                    <span>Glissez ChapCam dans le dossier Applications</span>
+                    <span>Glissez MirageCam dans le dossier Applications</span>
                   </li>
                   <li className="flex gap-3">
                     <span className="flex-shrink-0 w-6 h-6 bg-[#00ff88] rounded-full flex items-center justify-center text-black text-sm font-bold">3</span>
-                    <span>Ouvrez ChapCam et autorisez l&apos;acces a la camera</span>
+                    <span>Ouvrez MirageCam et autorisez l&apos;acces a la camera</span>
                   </li>
                 </ol>
               </div>
@@ -238,7 +241,7 @@ export default function DownloadPage() {
                   </li>
                   <li className="flex gap-3">
                     <span className="flex-shrink-0 w-6 h-6 bg-[#00ff88] rounded-full flex items-center justify-center text-black text-sm font-bold">3</span>
-                    <span>Lancez ChapCam depuis le menu Demarrer</span>
+                    <span>Lancez MirageCam depuis le menu Demarrer</span>
                   </li>
                 </ol>
               </div>
@@ -254,7 +257,7 @@ export default function DownloadPage() {
           >
             <p>Version 1.0.0 | Derniere mise a jour: Mai 2026</p>
             <p className="mt-2">
-              Besoin d&apos;aide? <a href="https://t.me/chapcam1" target="_blank" rel="noopener noreferrer" className="text-[#00ff88] hover:underline">Contactez-nous sur Telegram</a>
+              Besoin d&apos;aide? <a href="https://t.me/miragecam" target="_blank" rel="noopener noreferrer" className="text-[#00ff88] hover:underline">Contactez-nous sur Telegram</a>
             </p>
           </motion.div>
         </div>
@@ -262,3 +265,6 @@ export default function DownloadPage() {
     </main>
   )
 }
+```
+
+Allez sur GitHub, trouvez le fichier `app/download/page.tsx`, cliquez sur le **crayon ✏️**, **Ctrl+A**, collez et **Commit des changements** !
