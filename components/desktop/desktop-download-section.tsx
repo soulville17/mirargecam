@@ -1,18 +1,17 @@
-'use client'
+Voici le fichier complet corrigé, copiez tout et remplacez le contenu du fichier sur GitHub :
 
+```typescript
+'use client'
 import { useState } from 'react'
 import { Download, KeyRound, Loader2, CheckCircle2, AlertCircle } from 'lucide-react'
-
 export function DesktopDownloadSection({ downloadUrl }: { downloadUrl: string }) {
   const [licenseKey, setLicenseKey] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [verified, setVerified] = useState(false)
-
   const openDownload = () => {
     window.open(downloadUrl, '_blank', 'noopener,noreferrer')
   }
-
   const verifyAndDownload = async () => {
     setError(null)
     if (!licenseKey.trim()) {
@@ -39,10 +38,9 @@ export function DesktopDownloadSection({ downloadUrl }: { downloadUrl: string })
       setLoading(false)
     }
   }
-
   return (
     <section
-      aria-label="Deja client ChapCam PC"
+      aria-label="Deja client MirageCam PC"
       className="rounded-2xl border border-hairline bg-card p-6 md:p-8"
     >
       <div className="mb-1 flex items-center gap-2">
@@ -50,9 +48,8 @@ export function DesktopDownloadSection({ downloadUrl }: { downloadUrl: string })
         <h2 className="text-lg font-bold text-foreground">Deja client ?</h2>
       </div>
       <p className="mb-5 text-sm text-muted-foreground text-pretty">
-        Entre la cle de licence recue par email pour telecharger ChapCam PC.
+        Entre la cle de licence recue par email pour telecharger MirageCam PC.
       </p>
-
       <div className="flex flex-col gap-3 sm:flex-row">
         <input
           type="text"
@@ -65,7 +62,7 @@ export function DesktopDownloadSection({ downloadUrl }: { downloadUrl: string })
           onKeyDown={(e) => {
             if (e.key === 'Enter') verifyAndDownload()
           }}
-          placeholder="CHAPCAM-XXXX-XXXX-XXXX-XXXX"
+          placeholder="MIRAGECAM-XXXX-XXXX-XXXX-XXXX"
           aria-label="Cle de licence"
           className="w-full flex-1 rounded-xl border border-hairline bg-background px-4 py-3 font-mono text-sm uppercase tracking-wider text-foreground outline-none transition-colors placeholder:text-text-faint focus:border-primary/50"
         />
@@ -84,7 +81,6 @@ export function DesktopDownloadSection({ downloadUrl }: { downloadUrl: string })
           )}
         </button>
       </div>
-
       {error && (
         <p className="mt-3 flex items-center gap-1.5 text-xs text-red-400">
           <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
@@ -100,10 +96,12 @@ export function DesktopDownloadSection({ downloadUrl }: { downloadUrl: string })
           </button>
         </p>
       )}
-
       <p className="mt-4 text-xs text-text-faint text-pretty">
         Logiciel Windows. Compatible GPU NVIDIA. Cle activable sur 1 PC.
       </p>
     </section>
   )
 }
+```
+
+Allez sur GitHub, ouvrez ce fichier, cliquez sur le **crayon ✏️**, **Ctrl+A** pour tout sélectionner, collez et **Commit des changements** !
