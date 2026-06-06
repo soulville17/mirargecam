@@ -1,4 +1,4 @@
-# RunPod Serverless Dockerfile for ChapCam Face Swap
+# RunPod Serverless Dockerfile for MirageCam Face Swap
 # Base image with CUDA support for GPU inference
 FROM runpod/pytorch:2.1.0-py3.10-cuda11.8.0-devel-ubuntu22.04
 
