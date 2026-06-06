@@ -1,7 +1,7 @@
 {
-  "appId": "com.chapcam.desktop",
-  "productName": "ChapCam",
-  "copyright": "Copyright © 2024 ChapCam",
+  "appId": "com.miragecam.desktop",
+  "productName": "MirageCam",
+  "copyright": "Copyright © 2024 MirageCam",
   "directories": {
     "output": "dist-electron",
     "buildResources": "build"
@@ -30,12 +30,12 @@
     "entitlements": "build/entitlements.mac.plist",
     "entitlementsInherit": "build/entitlements.mac.plist",
     "extendInfo": {
-      "NSCameraUsageDescription": "ChapCam needs camera access for real-time face transformation",
-      "NSMicrophoneUsageDescription": "ChapCam needs microphone access for video calls"
+      "NSCameraUsageDescription": "MirageCam needs camera access for real-time face transformation",
+      "NSMicrophoneUsageDescription": "MirageCam needs microphone access for video calls"
     }
   },
   "dmg": {
-    "title": "ChapCam Installer",
+    "title": "MirageCam Installer",
     "icon": "public/icons/icon.jpg",
     "contents": [
       {
@@ -62,16 +62,16 @@
         "arch": ["x64"]
       }
     ],
-    "publisherName": "ChapCam",
-    "legalTrademarks": "ChapCam - Face Swap en Temps Reel"
+    "publisherName": "MirageCam",
+    "legalTrademarks": "MirageCam - Face Swap en Temps Reel"
   },
   "nsis": {
     "oneClick": false,
     "allowToChangeInstallationDirectory": true,
     "createDesktopShortcut": true,
     "createStartMenuShortcut": true,
-    "shortcutName": "ChapCam",
-    "uninstallDisplayName": "ChapCam",
+    "shortcutName": "MirageCam",
+    "uninstallDisplayName": "MirageCam",
     "installerLanguages": ["fr", "en"],
     "language": "1036"
   },
@@ -82,16 +82,16 @@
       "deb"
     ],
     "category": "Video",
-    "maintainer": "ChapCam <support@chapcam.com>",
+    "maintainer": "MirageCam <support@miragecam.com>",
     "desktop": {
-      "Name": "ChapCam",
+      "Name": "MirageCam",
       "Comment": "Face Swap en Temps Reel",
       "Keywords": "face;swap;video;camera"
     }
   },
   "publish": {
     "provider": "github",
-    "owner": "meryl225",
-    "repo": "chapcam-kz"
+    "owner": "soul",
+    "repo": "miragecam"
   }
 }
