@@ -22,9 +22,6 @@ jobs:
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
 
-      - name: Approve builds
-        run: pnpm approve-builds --yes
-
       - name: Build Next.js
         run: npx next build
         env:
@@ -38,6 +35,6 @@ jobs:
       - name: Upload artifact
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/MirageCam-Setup-*.exe
+          files: dist/*.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
