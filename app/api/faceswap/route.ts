@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import * as fal from "@fal-ai/client";
+import { fal } from "@fal-ai/client";
 
 // Vercel timeout 60s
 export const maxDuration = 60;
