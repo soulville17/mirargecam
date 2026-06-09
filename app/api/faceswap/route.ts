@@ -127,6 +127,9 @@ export async function GET(request: NextRequest) {
 
     const status = await checkJobStatus(jobId);
 
+    // Log pour debug — voir ce que RunPod renvoie exactement
+    console.log("[FaceSwap Status]", jobId, JSON.stringify(status).slice(0, 500));
+
     return NextResponse.json({
       success: true,
       ...status,
