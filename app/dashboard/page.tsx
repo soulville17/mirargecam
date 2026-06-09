@@ -42,10 +42,11 @@ export default function DashboardPage() {
     error,
     localVideoRef,
     remoteVideoRef,
+    remoteCanvasRef,
     connect,
     disconnect,
     updateAvatar,
-  } = useLucy21()
+  } = useLucy21() as any
 
   const supabase = createBrowserClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
@@ -398,12 +399,19 @@ export default function DashboardPage() {
           </div>
           
           <div className="relative aspect-video bg-[#0a0a0a]">
+            <canvas
+              ref={remoteCanvasRef}
+              className="w-full h-full object-cover"
+              style={{ display: isConnected ? 'block' : 'none' }}
+            />
+            {/* video gardée en fallback mais cachée */}
             <video
               ref={remoteVideoRef}
               autoPlay
               playsInline
               muted
               className="w-full h-full object-cover"
+              style={{ display: 'none' }}
             />
             
             <div className="absolute bottom-3 right-3 bg-black/70 backdrop-blur-md text-white text-xs px-3 py-1 rounded-md flex items-center gap-1.5 z-20">

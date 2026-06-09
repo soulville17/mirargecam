@@ -2,12 +2,10 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react'
 
-// Hook RunPod realtime — interface compatible avec useLucy21
+// Hook RunPod realtime — affichage via <canvas> (compatible tous navigateurs)
 // Traitement frame par frame via /api/faceswap (RunPod InsightFace)
-// Coût : ~$0.0003/sec vs $0.02/sec pour Decart = 70x moins cher
 
-const TARGET_FPS = 10 // 10 fps = bon compromis qualité/coût RunPod
-const FRAME_INTERVAL = 1000 / TARGET_FPS
+const FRAME_INTERVAL = 500 // 1 frame toutes les 500ms (RunPod ~1-3s par frame)
 
 export function useRunPodRealtime() {
   const [isConnected, setIsConnected] = useState(false)
@@ -15,16 +13,17 @@ export function useRunPodRealtime() {
   const [error, setError] = useState<string | null>(null)
 
   const localVideoRef = useRef<HTMLVideoElement>(null)
+  // remoteCanvasRef: on dessine directement sur le canvas DOM (pas de captureStream)
+  const remoteCanvasRef = useRef<HTMLCanvasElement>(null)
+  // remoteVideoRef gardé pour compatibilité avec page.tsx (non utilisé pour affichage RunPod)
   const remoteVideoRef = useRef<HTMLVideoElement>(null)
 
   const streamRef = useRef<MediaStream | null>(null)
-  const avatarUrlRef = useRef<string | null>(null)
   const avatarBase64Ref = useRef<string | null>(null)
   const processingRef = useRef(false)
   const lastFrameTimeRef = useRef(0)
   const animFrameRef = useRef<number | null>(null)
   const captureCanvasRef = useRef<HTMLCanvasElement | null>(null)
-  const outputCanvasRef = useRef<HTMLCanvasElement | null>(null)
 
   // Convertit une URL d'image en base64
   const fetchAvatarBase64 = useCallback(async (url: string): Promise<string> => {
@@ -38,7 +37,31 @@ export function useRunPodRealtime() {
     })
   }, [])
 
-  // Boucle de traitement frame par frame
+  // Dessine l'image base64 sur le canvas DOM visible
+  const drawToCanvas = useCallback((imageB64: string) => {
+    const canvas = remoteCanvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    const img = new Image()
+    img.onload = () => {
+      canvas.width = img.naturalWidth || img.width
+      canvas.height = img.naturalHeight || img.height
+      ctx.drawImage(img, 0, 0)
+      // Supprime le badge "AI Generated"
+      const w = canvas.width, h = canvas.height
+      if (w > 0 && h > 0) {
+        ctx.save()
+        ctx.filter = 'blur(14px)'
+        ctx.drawImage(canvas, w*0.32, Math.max(0, h*0.31), w*0.36, h*0.13, w*0.32, h*0.37, w*0.36, h*0.13)
+        ctx.restore()
+      }
+    }
+    img.onerror = (e) => console.error('[RunPod] drawToCanvas error:', e)
+    img.src = `data:image/jpeg;base64,${imageB64}`
+  }, [])
+
+  // Boucle principale : capture frame → soumet → poll → affiche
   const processLoop = useCallback(async () => {
     if (!processingRef.current) return
 
@@ -59,14 +82,14 @@ export function useRunPodRealtime() {
     }
 
     const ctx = captureCanvas.getContext('2d')
-    if (!ctx) return
+    if (!ctx) { animFrameRef.current = requestAnimationFrame(processLoop); return }
 
-    // Capture la frame courante
+    // Capture frame caméra
     ctx.drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height)
-    const frameBase64 = captureCanvas.toDataURL('image/jpeg', 0.75).split(',')[1]
+    const frameBase64 = captureCanvas.toDataURL('image/jpeg', 0.8).split(',')[1]
 
     try {
-      // Étape 1 : soumettre le job (retour immédiat, pas de timeout Vercel)
+      // 1. Soumettre le job (retour immédiat — pas de timeout Vercel)
       const submitRes = await fetch('/api/faceswap', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -87,31 +110,36 @@ export function useRunPodRealtime() {
           return
         }
         const e = await submitRes.json().catch(() => ({}))
-        console.error('[RunPod] Erreur soumission:', submitRes.status, e)
-        animFrameRef.current = requestAnimationFrame(processLoop)
+        console.error('[RunPod] Soumission échouée:', submitRes.status, e)
+        if (processingRef.current) animFrameRef.current = requestAnimationFrame(processLoop)
         return
       }
 
-      const { job_id } = await submitRes.json()
+      const submitData = await submitRes.json()
+      const job_id = submitData.job_id
       if (!job_id) {
-        console.error('[RunPod] Pas de job_id dans la réponse')
-        animFrameRef.current = requestAnimationFrame(processLoop)
+        console.error('[RunPod] Pas de job_id:', submitData)
+        if (processingRef.current) animFrameRef.current = requestAnimationFrame(processLoop)
         return
       }
 
-      // Étape 2 : polling du résultat (max 55s)
+      // 2. Poll le résultat (max 55s)
       const deadline = Date.now() + 55000
       let output_image: string | null = null
       while (Date.now() < deadline) {
         await new Promise(r => setTimeout(r, 1500))
-        if (!processingRef.current) return  // déconnecté pendant l'attente
+        if (!processingRef.current) return
 
         const pollRes = await fetch(`/api/faceswap?job_id=${job_id}`)
-        if (!pollRes.ok) continue
+        if (!pollRes.ok) { console.warn('[RunPod] Poll erreur:', pollRes.status); continue }
         const poll = await pollRes.json()
+        console.log('[RunPod] Status:', poll.status)
 
-        if (poll.status === 'COMPLETED' && poll.output?.output_image) {
-          output_image = poll.output.output_image
+        if (poll.status === 'COMPLETED') {
+          // Chercher output_image à différents endroits selon le format RunPod
+          output_image = poll.output?.output_image ?? poll.output_image ?? null
+          if (output_image) break
+          console.warn('[RunPod] COMPLETED mais pas d\'image:', JSON.stringify(poll).slice(0, 300))
           break
         }
         if (poll.status === 'FAILED') {
@@ -120,56 +148,29 @@ export function useRunPodRealtime() {
         }
       }
 
-      // Étape 3 : afficher l'image résultat
-      if (output_image && outputCanvasRef.current) {
-        const img = new Image()
-        img.onload = () => {
-          const out = outputCanvasRef.current
-          if (!out) return
-          const octx = out.getContext('2d')
-          if (!octx) return
-          out.width = img.naturalWidth || img.width
-          out.height = img.naturalHeight || img.height
-          octx.drawImage(img, 0, 0)
-          // Supprime le badge "AI Generated"
-          const w = out.width, h = out.height
-          if (w > 0 && h > 0) {
-            octx.save()
-            octx.filter = 'blur(14px)'
-            octx.drawImage(out, w*0.32, Math.max(0, h*0.31), w*0.36, h*0.13, w*0.32, h*0.37, w*0.36, h*0.13)
-            octx.restore()
-          }
-          // Connecter le canvas à la vidéo remote
-          if (remoteVideoRef.current && !remoteVideoRef.current.srcObject) {
-            const stream = (out as any).captureStream?.(TARGET_FPS)
-            if (stream) {
-              remoteVideoRef.current.srcObject = stream
-              remoteVideoRef.current.play().catch(() => {})
-            }
-          }
-        }
-        img.onerror = (e) => console.error('[RunPod] Image load error:', e)
-        img.src = `data:image/jpeg;base64,${output_image}`
+      // 3. Afficher
+      if (output_image) {
+        drawToCanvas(output_image)
+      } else {
+        console.warn('[RunPod] Pas d\'image résultat')
       }
+
     } catch (err) {
-      console.error('[RunPod Realtime]', err)
+      console.error('[RunPod Realtime] Exception:', err)
     }
 
     if (processingRef.current) {
       animFrameRef.current = requestAnimationFrame(processLoop)
     }
-  }, [])
+  }, [drawToCanvas])
 
   const connect = useCallback(async (avatarImageUrl: string) => {
     try {
       setIsConnecting(true)
       setError(null)
-      avatarUrlRef.current = avatarImageUrl
 
-      // Charger l'avatar en base64
       avatarBase64Ref.current = await fetchAvatarBase64(avatarImageUrl)
 
-      // Démarrer la caméra
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { width: 1280, height: 720, frameRate: 30 },
         audio: false,
@@ -181,19 +182,14 @@ export function useRunPodRealtime() {
         await localVideoRef.current.play()
       }
 
-      // Canvas de capture
       captureCanvasRef.current = document.createElement('canvas')
       captureCanvasRef.current.width = 640
       captureCanvasRef.current.height = 480
-
-      // Canvas de sortie
-      outputCanvasRef.current = document.createElement('canvas')
 
       processingRef.current = true
       setIsConnected(true)
       setIsConnecting(false)
 
-      // Lancer la boucle
       animFrameRef.current = requestAnimationFrame(processLoop)
 
     } catch (err: any) {
@@ -217,7 +213,6 @@ export function useRunPodRealtime() {
     }
 
     if (localVideoRef.current) localVideoRef.current.srcObject = null
-    if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null
 
     avatarBase64Ref.current = null
     setIsConnected(false)
@@ -226,7 +221,6 @@ export function useRunPodRealtime() {
   }, [])
 
   const updateAvatar = useCallback(async (avatarImageUrl: string) => {
-    avatarUrlRef.current = avatarImageUrl
     avatarBase64Ref.current = await fetchAvatarBase64(avatarImageUrl)
   }, [fetchAvatarBase64])
 
@@ -239,7 +233,8 @@ export function useRunPodRealtime() {
     isConnecting,
     error,
     localVideoRef,
-    remoteVideoRef,
+    remoteVideoRef,      // gardé pour compatibilité (non utilisé pour RunPod)
+    remoteCanvasRef,     // utiliser ce ref sur un <canvas> dans la page
     connect,
     disconnect,
     updateAvatar,
