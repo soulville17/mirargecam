@@ -80,35 +80,53 @@ export function useRunPodRealtime() {
 
       if (res.ok) {
         const data = await res.json()
-        if (data.output_image && outputCanvasRef.current) {
+        const imageB64 = data.output_image
+        if (imageB64 && outputCanvasRef.current) {
           const img = new Image()
           img.onload = () => {
             const out = outputCanvasRef.current
             if (!out) return
             const octx = out.getContext('2d')
             if (!octx) return
-            out.width = img.width
-            out.height = img.height
+            out.width = img.naturalWidth || img.width
+            out.height = img.naturalHeight || img.height
             octx.drawImage(img, 0, 0)
             // Supprime le badge "AI Generated" gravé par le serveur GPU
             const w = out.width, h = out.height
-            octx.save()
-            octx.filter = 'blur(14px)'
-            octx.drawImage(out, w*0.32, Math.max(0, h*0.31), w*0.36, h*0.13, w*0.32, h*0.37, w*0.36, h*0.13)
-            octx.restore()
+            if (w > 0 && h > 0) {
+              octx.save()
+              octx.filter = 'blur(14px)'
+              octx.drawImage(out, w*0.32, Math.max(0, h*0.31), w*0.36, h*0.13, w*0.32, h*0.37, w*0.36, h*0.13)
+              octx.restore()
+            }
             // Afficher le canvas dans la video remote via captureStream
-            if (remoteVideoRef.current && !remoteVideoRef.current.srcObject) {
-              const stream = (out as any).captureStream?.(TARGET_FPS)
-              if (stream) remoteVideoRef.current.srcObject = stream
+            if (remoteVideoRef.current) {
+              if (!remoteVideoRef.current.srcObject) {
+                const stream = (out as any).captureStream?.(TARGET_FPS)
+                if (stream) {
+                  remoteVideoRef.current.srcObject = stream
+                  remoteVideoRef.current.play().catch(() => {})
+                }
+              }
             }
           }
-          img.src = `data:image/jpeg;base64,${data.output_image}`
+          img.onerror = (e) => console.error('[RunPod] Image load error:', e)
+          img.src = `data:image/jpeg;base64,${imageB64}`
+        } else {
+          console.warn('[RunPod] Pas de output_image dans la réponse:', data)
         }
       } else if (res.status === 402) {
         setError('Points insuffisants — recharge ton compte')
         processingRef.current = false
         setIsConnected(false)
         return
+      } else {
+        const errData = await res.json().catch(() => ({}))
+        console.error('[RunPod] Erreur API faceswap:', res.status, errData)
+        if (res.status === 504 || res.status === 500) {
+          // Timeout ou erreur serveur — on continue la boucle sans arrêter
+          console.warn('[RunPod] Timeout/erreur serveur, on continue...')
+        }
       }
     } catch (err) {
       console.error('[RunPod Realtime]', err)

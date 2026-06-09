@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { runFaceSwapSync, submitFaceSwapJob, checkJobStatus } from "@/lib/runpod";
 
+// Vercel: augmenter le timeout à 60s pour laisser RunPod traiter
+export const maxDuration = 60;
+
 // Points cost: 2 points = 1 second of swap
 const POINTS_PER_FRAME = 2;
 
