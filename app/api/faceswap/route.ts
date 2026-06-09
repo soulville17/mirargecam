@@ -29,46 +29,35 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check user points
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("points")
-      .eq("id", user.id)
-      .single();
+    // MODE TEST — points illimités (désactiver en production)
+    const TEST_MODE = true
+    let currentPoints = 999999
 
-    if (profileError || !profile) {
-      return NextResponse.json(
-        { error: "Profil utilisateur non trouve" },
-        { status: 404 }
-      );
+    if (!TEST_MODE) {
+      const { data: subscription, error: subError } = await supabase
+        .from("subscriptions")
+        .select("points")
+        .eq("user_id", user.id)
+        .single();
+
+      if (subError || !subscription) {
+        return NextResponse.json({ error: "Abonnement non trouve" }, { status: 404 });
+      }
+
+      currentPoints = subscription.points ?? 0
+
+      if (currentPoints < POINTS_PER_FRAME) {
+        return NextResponse.json(
+          { error: "Points insuffisants", points_required: POINTS_PER_FRAME, points_available: currentPoints },
+          { status: 402 }
+        );
+      }
+
+      await supabase
+        .from("subscriptions")
+        .update({ points: currentPoints - POINTS_PER_FRAME })
+        .eq("user_id", user.id);
     }
-
-    if (profile.points < POINTS_PER_FRAME) {
-      return NextResponse.json(
-        { error: "Points insuffisants", points_required: POINTS_PER_FRAME, points_available: profile.points },
-        { status: 402 }
-      );
-    }
-
-    // Deduct points
-    const { error: updateError } = await supabase
-      .from("profiles")
-      .update({ points: profile.points - POINTS_PER_FRAME })
-      .eq("id", user.id);
-
-    if (updateError) {
-      return NextResponse.json(
-        { error: "Erreur lors de la deduction des points" },
-        { status: 500 }
-      );
-    }
-
-    // Log the swap transaction
-    await supabase.from("swap_transactions").insert({
-      user_id: user.id,
-      points_used: POINTS_PER_FRAME,
-      status: "processing",
-    });
 
     if (mode === "async") {
       // Async mode - return job ID immediately

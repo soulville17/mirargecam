@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import { Camera, Zap, Clock, Coins, Plus, Check, AlertCircle, Loader2, Square, Wifi, WifiOff, Monitor, Cloud, Settings } from 'lucide-react'
-import { useLucy21 } from '@/hooks/use-lucy-21'
+import { useRunPodRealtime as useLucy21 } from '@/hooks/use-runpod-realtime'
 import { detectHardwareCapabilities, determineProcessingMode, loadProcessingPreferences, saveProcessingPreferences, type HardwareCapabilities, type UserProcessingPreferences } from '@/lib/hardware-detection'
 
 const SUPABASE_URL = 'https://ojmzqokffbptmcktnwdy.supabase.co'
