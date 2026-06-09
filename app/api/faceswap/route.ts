@@ -64,37 +64,29 @@ export async function POST(request: NextRequest) {
       const jobId = await submitFaceSwapJob({
         source_image,
         target_image,
-        enhance_face: true,
-        face_restore: true,
+        enhance_face: false,
+        face_restore: false,
       });
 
       return NextResponse.json({
         success: true,
         job_id: jobId,
-        points_remaining: profile.points - POINTS_PER_FRAME,
+        points_remaining: currentPoints - POINTS_PER_FRAME,
       });
     } else {
       // Sync mode - wait for result
       const result = await runFaceSwapSync({
         source_image,
         target_image,
-        enhance_face: true,
-        face_restore: true,
+        enhance_face: false,
+        face_restore: false,
       });
-
-      // Update transaction status
-      await supabase
-        .from("swap_transactions")
-        .update({ status: "completed" })
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false })
-        .limit(1);
 
       return NextResponse.json({
         success: true,
         output_image: result.output_image,
         processing_time: result.processing_time,
-        points_remaining: profile.points - POINTS_PER_FRAME,
+        points_remaining: currentPoints - POINTS_PER_FRAME,
       });
     }
   } catch (error) {
