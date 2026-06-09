@@ -103,9 +103,31 @@ export async function runFaceSwapSync(input: FaceSwapInput): Promise<FaceSwapOut
   }
 
   const data = await response.json();
-  
+
   if (data.status === "FAILED") {
     throw new Error(data.error || "Face swap failed");
+  }
+
+  // Si pas encore terminé (IN_QUEUE / IN_PROGRESS), attendre et réessayer
+  if (data.status === "IN_QUEUE" || data.status === "IN_PROGRESS") {
+    const jobId = data.id;
+    // Polling jusqu'à 55 secondes
+    const deadline = Date.now() + 55000;
+    while (Date.now() < deadline) {
+      await new Promise(r => setTimeout(r, 2000));
+      const pollRes = await fetch(
+        `https://api.runpod.ai/v2/${RUNPOD_ENDPOINT_ID}/status/${jobId}`,
+        { headers: { Authorization: `Bearer ${RUNPOD_API_KEY}` } }
+      );
+      const poll = await pollRes.json();
+      if (poll.status === "COMPLETED") return poll.output;
+      if (poll.status === "FAILED") throw new Error(poll.error || "Face swap failed");
+    }
+    throw new Error("RunPod timeout: job trop long");
+  }
+
+  if (!data.output) {
+    throw new Error(`RunPod: réponse inattendue — ${JSON.stringify(data).slice(0, 200)}`);
   }
 
   return data.output;
