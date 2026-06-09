@@ -66,67 +66,90 @@ export function useRunPodRealtime() {
     const frameBase64 = captureCanvas.toDataURL('image/jpeg', 0.75).split(',')[1]
 
     try {
-      const res = await fetch('/api/faceswap', {
+      // Étape 1 : soumettre le job (retour immédiat, pas de timeout Vercel)
+      const submitRes = await fetch('/api/faceswap', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           source_image: avatarBase64,
           target_image: frameBase64,
-          mode: 'sync',
-          enhance_face: false,  // désactivé pour éviter artefacts (bague, etc.)
+          mode: 'async',
+          enhance_face: false,
           face_restore: false,
         }),
       })
 
-      if (res.ok) {
-        const data = await res.json()
-        const imageB64 = data.output_image
-        if (imageB64 && outputCanvasRef.current) {
-          const img = new Image()
-          img.onload = () => {
-            const out = outputCanvasRef.current
-            if (!out) return
-            const octx = out.getContext('2d')
-            if (!octx) return
-            out.width = img.naturalWidth || img.width
-            out.height = img.naturalHeight || img.height
-            octx.drawImage(img, 0, 0)
-            // Supprime le badge "AI Generated" gravé par le serveur GPU
-            const w = out.width, h = out.height
-            if (w > 0 && h > 0) {
-              octx.save()
-              octx.filter = 'blur(14px)'
-              octx.drawImage(out, w*0.32, Math.max(0, h*0.31), w*0.36, h*0.13, w*0.32, h*0.37, w*0.36, h*0.13)
-              octx.restore()
-            }
-            // Afficher le canvas dans la video remote via captureStream
-            if (remoteVideoRef.current) {
-              if (!remoteVideoRef.current.srcObject) {
-                const stream = (out as any).captureStream?.(TARGET_FPS)
-                if (stream) {
-                  remoteVideoRef.current.srcObject = stream
-                  remoteVideoRef.current.play().catch(() => {})
-                }
-              }
+      if (!submitRes.ok) {
+        if (submitRes.status === 402) {
+          setError('Points insuffisants — recharge ton compte')
+          processingRef.current = false
+          setIsConnected(false)
+          return
+        }
+        const e = await submitRes.json().catch(() => ({}))
+        console.error('[RunPod] Erreur soumission:', submitRes.status, e)
+        animFrameRef.current = requestAnimationFrame(processLoop)
+        return
+      }
+
+      const { job_id } = await submitRes.json()
+      if (!job_id) {
+        console.error('[RunPod] Pas de job_id dans la réponse')
+        animFrameRef.current = requestAnimationFrame(processLoop)
+        return
+      }
+
+      // Étape 2 : polling du résultat (max 55s)
+      const deadline = Date.now() + 55000
+      let output_image: string | null = null
+      while (Date.now() < deadline) {
+        await new Promise(r => setTimeout(r, 1500))
+        if (!processingRef.current) return  // déconnecté pendant l'attente
+
+        const pollRes = await fetch(`/api/faceswap?job_id=${job_id}`)
+        if (!pollRes.ok) continue
+        const poll = await pollRes.json()
+
+        if (poll.status === 'COMPLETED' && poll.output?.output_image) {
+          output_image = poll.output.output_image
+          break
+        }
+        if (poll.status === 'FAILED') {
+          console.error('[RunPod] Job échoué:', poll.error)
+          break
+        }
+      }
+
+      // Étape 3 : afficher l'image résultat
+      if (output_image && outputCanvasRef.current) {
+        const img = new Image()
+        img.onload = () => {
+          const out = outputCanvasRef.current
+          if (!out) return
+          const octx = out.getContext('2d')
+          if (!octx) return
+          out.width = img.naturalWidth || img.width
+          out.height = img.naturalHeight || img.height
+          octx.drawImage(img, 0, 0)
+          // Supprime le badge "AI Generated"
+          const w = out.width, h = out.height
+          if (w > 0 && h > 0) {
+            octx.save()
+            octx.filter = 'blur(14px)'
+            octx.drawImage(out, w*0.32, Math.max(0, h*0.31), w*0.36, h*0.13, w*0.32, h*0.37, w*0.36, h*0.13)
+            octx.restore()
+          }
+          // Connecter le canvas à la vidéo remote
+          if (remoteVideoRef.current && !remoteVideoRef.current.srcObject) {
+            const stream = (out as any).captureStream?.(TARGET_FPS)
+            if (stream) {
+              remoteVideoRef.current.srcObject = stream
+              remoteVideoRef.current.play().catch(() => {})
             }
           }
-          img.onerror = (e) => console.error('[RunPod] Image load error:', e)
-          img.src = `data:image/jpeg;base64,${imageB64}`
-        } else {
-          console.warn('[RunPod] Pas de output_image dans la réponse:', data)
         }
-      } else if (res.status === 402) {
-        setError('Points insuffisants — recharge ton compte')
-        processingRef.current = false
-        setIsConnected(false)
-        return
-      } else {
-        const errData = await res.json().catch(() => ({}))
-        console.error('[RunPod] Erreur API faceswap:', res.status, errData)
-        if (res.status === 504 || res.status === 500) {
-          // Timeout ou erreur serveur — on continue la boucle sans arrêter
-          console.warn('[RunPod] Timeout/erreur serveur, on continue...')
-        }
+        img.onerror = (e) => console.error('[RunPod] Image load error:', e)
+        img.src = `data:image/jpeg;base64,${output_image}`
       }
     } catch (err) {
       console.error('[RunPod Realtime]', err)
