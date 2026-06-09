@@ -40,6 +40,7 @@ export default function DashboardPage() {
     isConnected,
     isConnecting,
     error,
+    latestFrame,
     localVideoRef,
     remoteVideoRef,
     remoteCanvasRef,
@@ -399,20 +400,16 @@ export default function DashboardPage() {
           </div>
           
           <div className="relative aspect-video bg-[#0a0a0a]">
-            <canvas
-              ref={remoteCanvasRef}
-              className="w-full h-full object-cover"
-              style={{ display: isConnected ? 'block' : 'none' }}
-            />
-            {/* video gardée en fallback mais cachée */}
-            <video
-              ref={remoteVideoRef}
-              autoPlay
-              playsInline
-              muted
-              className="w-full h-full object-cover"
-              style={{ display: 'none' }}
-            />
+            {latestFrame ? (
+              <img
+                src={`data:image/jpeg;base64,${latestFrame}`}
+                className="w-full h-full object-cover"
+                alt="swap"
+              />
+            ) : (
+              <canvas ref={remoteCanvasRef} style={{ display: 'none' }} />
+            )}
+            <video ref={remoteVideoRef} autoPlay playsInline muted style={{ display: 'none' }} />
             
             <div className="absolute bottom-3 right-3 bg-black/70 backdrop-blur-md text-white text-xs px-3 py-1 rounded-md flex items-center gap-1.5 z-20">
               <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
