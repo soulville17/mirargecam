@@ -65,8 +65,8 @@ export function useRunPodRealtime() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          source_image: avatarBase64,
-          target_image: frameBase64,
+          source_image: frameBase64,   // ton visage (webcam) = source
+          target_image: avatarBase64,  // avatar = cible où coller
           mode: 'async',
         }),
       })
