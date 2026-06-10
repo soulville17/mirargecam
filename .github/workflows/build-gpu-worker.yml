@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'Dockerfile.runpod'
+      - 'Dockerfile'
       - 'runpod_handler.py'
   workflow_dispatch:  # Permet de lancer manuellement
 
@@ -42,5 +42,3 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
