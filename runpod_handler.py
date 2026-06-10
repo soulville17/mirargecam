@@ -1,108 +1,79 @@
-"""
-MirageCam Face Swap Handler — RunPod Serverless
-"""
+print("PYTHON STARTED", flush=True)
+
 import runpod
-import base64
-import cv2
-import numpy as np
-from PIL import Image
-import io
-import os
-import time
-import urllib.request
 
-MODELS_DIR = "/app/models"
-INSWAPPER_PATH = os.path.join(MODELS_DIR, "inswapper_128.onnx")
-INSIGHTFACE_ROOT = "/app/insightface"
-
-def download_model():
-    """Télécharger inswapper_128.onnx si absent."""
-    if os.path.exists(INSWAPPER_PATH):
-        return True
-    os.makedirs(MODELS_DIR, exist_ok=True)
-    print("[Model] Téléchargement de inswapper_128.onnx...", flush=True)
-    urls = [
-        "https://github.com/deepinsight/insightface/releases/download/v0.7/inswapper_128.onnx",
-        "https://huggingface.co/deepinsight/inswapper/resolve/main/inswapper_128.onnx",
-    ]
-    for url in urls:
-        try:
-            print(f"[Model] Essai: {url}", flush=True)
-            urllib.request.urlretrieve(url, INSWAPPER_PATH)
-            print("[Model] Téléchargement réussi!", flush=True)
-            return True
-        except Exception as e:
-            print(f"[Model] Échec: {e}", flush=True)
-    return False
-
-def b64_to_img(b64_str):
-    """Décoder une image base64 en numpy array BGR."""
-    if ',' in b64_str:
-        b64_str = b64_str.split(',')[1]
-    data = base64.b64decode(b64_str)
-    img = Image.open(io.BytesIO(data)).convert('RGB')
-    return cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
-
-# Charger les modèles une seule fois au démarrage
-print("[Init] Chargement InsightFace...", flush=True)
-import insightface
-from insightface.app import FaceAnalysis
-
-download_model()
-
-face_analyzer = FaceAnalysis(
-    name='buffalo_l',
-    root=INSIGHTFACE_ROOT,
-    providers=['CPUExecutionProvider']
-)
-face_analyzer.prepare(ctx_id=-1, det_size=(640, 640))
-
-swapper = insightface.model_zoo.get_model(
-    INSWAPPER_PATH,
-    providers=['CPUExecutionProvider']
-)
-print("[Init] Modèles chargés, prêt!", flush=True)
+print("RUNPOD IMPORTED", flush=True)
 
 def handler(event):
-    start = time.time()
-    print(f"[Handler] Nouvelle requête: {event}", flush=True)
-
-    inp = event.get('input', {})
-    source_b64 = inp.get('source_image')
-    target_b64 = inp.get('target_image')
-
-    if not source_b64 or not target_b64:
-        return {"error": "source_image et target_image sont requis"}
-
+    print(f"[Handler] Requête reçue", flush=True)
     try:
+        import base64, cv2, numpy as np, io, os, time, urllib.request
+        from PIL import Image
+        import insightface
+        from insightface.app import FaceAnalysis
+
+        print("[Handler] Imports OK", flush=True)
+
+        MODELS_DIR = "/app/models"
+        INSWAPPER_PATH = os.path.join(MODELS_DIR, "inswapper_128.onnx")
+        INSIGHTFACE_ROOT = "/app/insightface"
+
+        # Télécharger le modèle si absent
+        if not os.path.exists(INSWAPPER_PATH):
+            os.makedirs(MODELS_DIR, exist_ok=True)
+            print("[Handler] Téléchargement inswapper_128.onnx...", flush=True)
+            for url in [
+                "https://github.com/deepinsight/insightface/releases/download/v0.7/inswapper_128.onnx",
+                "https://huggingface.co/deepinsight/inswapper/resolve/main/inswapper_128.onnx",
+            ]:
+                try:
+                    urllib.request.urlretrieve(url, INSWAPPER_PATH)
+                    print(f"[Handler] Modèle téléchargé depuis {url}", flush=True)
+                    break
+                except Exception as e:
+                    print(f"[Handler] Échec {url}: {e}", flush=True)
+
+        inp = event.get('input', {})
+        source_b64 = inp.get('source_image')
+        target_b64 = inp.get('target_image')
+
+        if not source_b64 or not target_b64:
+            return {"error": "source_image et target_image sont requis"}
+
+        def b64_to_img(b64):
+            if ',' in b64: b64 = b64.split(',')[1]
+            data = base64.b64decode(b64)
+            img = Image.open(io.BytesIO(data)).convert('RGB')
+            return cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+
+        start = time.time()
+
+        fa = FaceAnalysis(name='buffalo_l', root=INSIGHTFACE_ROOT,
+                          providers=['CPUExecutionProvider'])
+        fa.prepare(ctx_id=-1, det_size=(640, 640))
+        swapper = insightface.model_zoo.get_model(INSWAPPER_PATH,
+                  providers=['CPUExecutionProvider'])
+
         src = b64_to_img(source_b64)
         tgt = b64_to_img(target_b64)
 
-        src_faces = face_analyzer.get(src)
-        tgt_faces = face_analyzer.get(tgt)
-
-        if not src_faces:
-            return {"error": "Aucun visage détecté dans source_image"}
-        if not tgt_faces:
-            return {"error": "Aucun visage détecté dans target_image"}
+        src_faces = fa.get(src)
+        tgt_faces = fa.get(tgt)
+        if not src_faces: return {"error": "Pas de visage dans source"}
+        if not tgt_faces: return {"error": "Pas de visage dans cible"}
 
         result = swapper.get(tgt, tgt_faces[0], src_faces[0], paste_back=True)
-
         _, buf = cv2.imencode('.jpg', result, [cv2.IMWRITE_JPEG_QUALITY, 90])
         output_b64 = base64.b64encode(buf).decode('utf-8')
-
         elapsed = int((time.time() - start) * 1000)
-        print(f"[Handler] Swap terminé en {elapsed}ms", flush=True)
-
-        return {
-            "output_image": output_b64,
-            "processing_time": elapsed
-        }
+        print(f"[Handler] Terminé en {elapsed}ms", flush=True)
+        return {"output_image": output_b64, "processing_time": elapsed}
 
     except Exception as e:
-        print(f"[Handler] Erreur: {e}", flush=True)
         import traceback
+        print(f"[Handler] ERREUR: {e}", flush=True)
         traceback.print_exc()
         return {"error": str(e)}
 
+print("STARTING RUNPOD SERVER", flush=True)
 runpod.serverless.start({"handler": handler})
