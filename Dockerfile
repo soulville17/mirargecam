@@ -1,24 +1,18 @@
 # MirageCam Face Swap Worker — RunPod Serverless
-FROM python:3.10-slim
+FROM python:3.10
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 
 # Dépendances système
 RUN apt-get update && apt-get install -y \
-    libgl1 \
+    libgl1-mesa-glx \
     libglib2.0-0 \
     libgomp1 \
-    build-essential \
-    cmake \
-    git \
     && rm -rf /var/lib/apt/lists/*
 
-# Dépendances Python (CPU — stable et compatible partout)
-RUN pip install --no-cache-dir numpy pillow requests opencv-python-headless
-RUN pip install --no-cache-dir onnxruntime
-RUN pip install --no-cache-dir insightface
-RUN pip install --no-cache-dir runpod
+# Dépendances Python
+RUN pip install --no-cache-dir numpy pillow requests opencv-python-headless onnxruntime insightface runpod
 
 # Dossier de travail
 WORKDIR /app
