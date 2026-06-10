@@ -1,34 +1,31 @@
-# RunPod Serverless Dockerfile for MirageCam Face Swap
-FROM runpod/pytorch:2.1.0-py3.10-cuda11.8.0-devel-ubuntu22.04
+# MirageCam Face Swap Worker — RunPod Serverless
+FROM python:3.10-slim
 
-WORKDIR /app
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
 
 # Dépendances système
 RUN apt-get update && apt-get install -y \
-    git \
-    ffmpeg \
-    libsm6 \
-    libxext6 \
-    libgl1-mesa-glx \
+    libgl1 \
+    libglib2.0-0 \
+    libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Dépendances Python
+# Dépendances Python (CPU — stable et compatible partout)
 RUN pip install --no-cache-dir \
-    runpod \
+    runpod==1.6.2 \
     opencv-python-headless \
     numpy \
+    onnxruntime \
+    insightface==0.7.3 \
     pillow \
-    insightface \
-    onnxruntime-gpu \
     requests
 
-# Créer les dossiers de modèles
+# Dossier de travail
+WORKDIR /app
 RUN mkdir -p /app/models /app/insightface
 
-# Copier le handler (modèles téléchargés au premier démarrage)
+# Copier le handler
 COPY runpod_handler.py /app/handler.py
-
-ENV PYTHONUNBUFFERED=1
-ENV NVIDIA_VISIBLE_DEVICES=all
 
 CMD ["python", "-u", "/app/handler.py"]
