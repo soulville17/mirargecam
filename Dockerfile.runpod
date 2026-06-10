@@ -1,14 +1,14 @@
 # Base image NVIDIA officielle avec CUDA 11.8 + cuDNN 8
 FROM nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04
 
-# Éviter les prompts interactifs
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Dépendances système + Python 3.10
 RUN apt-get update && apt-get install -y \
     python3.10 \
     python3-pip \
-    wget \
+    curl \
+    ca-certificates \
     libgl1-mesa-glx \
     libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
@@ -24,17 +24,12 @@ RUN pip3 install --no-cache-dir \
 
 # Dossier de travail
 WORKDIR /app
-
-# Télécharger le modèle InsightFace inswapper_128
-RUN mkdir -p /app/models && \
-    wget -q "https://huggingface.co/deepinsight/inswapper/resolve/main/inswapper_128.onnx" \
-    -O /app/models/inswapper_128.onnx
-
-# Pré-télécharger le modèle d'analyse de visage buffalo_l
-RUN python -c "from insightface.app import FaceAnalysis; fa = FaceAnalysis(name='buffalo_l', root='/app/insightface'); fa.prepare(ctx_id=-1, det_size=(640,640)); print('buffalo_l téléchargé')"
+RUN mkdir -p /app/models /app/insightface
 
 # Copier le handler
 COPY runpod_handler.py /app/handler.py
 
-# Lancer le handler
+# Le modèle inswapper_128.onnx sera téléchargé au premier démarrage
+# (dans le handler, fonction load_models)
+
 CMD ["python3", "-u", "/app/handler.py"]

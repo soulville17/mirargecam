@@ -22,6 +22,28 @@ face_swapper = None
 face_analyser = None
 
 
+def download_model_if_needed():
+    """Télécharger inswapper_128.onnx si absent"""
+    if os.path.exists(INSWAPPER_PATH):
+        return
+    print("[MirageCam] Téléchargement du modèle inswapper_128.onnx...")
+    os.makedirs(MODELS_DIR, exist_ok=True)
+    import urllib.request
+    # Essayer plusieurs sources
+    urls = [
+        "https://github.com/deepinsight/insightface/releases/download/v0.7/inswapper_128.onnx",
+        "https://huggingface.co/deepinsight/inswapper/resolve/main/inswapper_128.onnx",
+    ]
+    for url in urls:
+        try:
+            urllib.request.urlretrieve(url, INSWAPPER_PATH)
+            print(f"[MirageCam] Modèle téléchargé depuis {url}")
+            return
+        except Exception as e:
+            print(f"[MirageCam] Échec {url}: {e}")
+    raise RuntimeError("Impossible de télécharger inswapper_128.onnx")
+
+
 def load_models():
     """Charger les modèles une seule fois (cold start)"""
     global face_swapper, face_analyser
@@ -30,6 +52,8 @@ def load_models():
         return face_swapper, face_analyser
 
     print("[MirageCam] Chargement des modèles...")
+    download_model_if_needed()
+
     import insightface
     from insightface.app import FaceAnalysis
 
