@@ -67,7 +67,7 @@ export function useRunPodRealtime() {
       return
     }
 
-    const frameBase64 = captureCanvas.toDataURL('image/jpeg', 0.85).split(',')[1]
+    const frameBase64 = captureCanvas.toDataURL('image/jpeg', 0.95).split(',')[1]
 
     try {
       // 1. Soumettre le job
@@ -162,8 +162,8 @@ export function useRunPodRealtime() {
       }
 
       captureCanvasRef.current = document.createElement('canvas')
-      captureCanvasRef.current.width = 640
-      captureCanvasRef.current.height = 480
+      captureCanvasRef.current.width = 1280
+      captureCanvasRef.current.height = 720
 
       // Petite pause pour s'assurer que la première frame est bien là
       await new Promise(r => setTimeout(r, 500))
