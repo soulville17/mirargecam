@@ -68,6 +68,9 @@ export function useRunPodRealtime() {
     }
 
     const frameBase64 = captureCanvas.toDataURL('image/jpeg', 0.95).split(',')[1]
+    const avatarB64 = avatarBase64Ref.current || ''
+
+    console.log('[Debug] source(webcam) size:', frameBase64.length, '| target(avatar) size:', avatarB64.length)
 
     try {
       // 1. Soumettre le job
@@ -75,8 +78,8 @@ export function useRunPodRealtime() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          source_image: frameBase64,   // ton visage (webcam) = source
-          target_image: avatarBase64,  // avatar = cible où coller
+          source_image: frameBase64,  // ton visage (webcam) = source
+          target_image: avatarB64,    // avatar = cible où coller
           mode: 'async',
         }),
       })
