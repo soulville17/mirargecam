@@ -60,33 +60,63 @@ export function useRunPodRealtime() {
     const frameBase64 = captureCanvas.toDataURL('image/jpeg', 0.85).split(',')[1]
 
     try {
+      // 1. Soumettre le job
       const res = await fetch('/api/faceswap', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           source_image: avatarBase64,
           target_image: frameBase64,
+          mode: 'async',
         }),
       })
 
-      if (res.ok) {
+      if (!res.ok) {
+        if (res.status === 402) {
+          setError('Points insuffisants')
+          processingRef.current = false
+          setIsConnected(false)
+          return
+        }
+        const e = await res.json().catch(() => ({}))
+        console.error('[RunPod] Erreur POST:', res.status, e)
+      } else {
         const data = await res.json()
+
+        // 2. Si réponse directe (sync)
         if (data.output_image) {
           setLatestFrame(data.output_image)
-        } else {
-          console.error('[fal.ai] Pas d\'output_image:', JSON.stringify(data).slice(0, 200))
         }
-      } else if (res.status === 402) {
-        setError('Points insuffisants')
-        processingRef.current = false
-        setIsConnected(false)
-        return
-      } else {
-        const e = await res.json().catch(() => ({}))
-        console.error('[fal.ai] Erreur:', res.status, e)
+        // 3. Si réponse async → polling
+        else if (data.job_id) {
+          const jobId = data.job_id
+          let attempts = 0
+          const maxAttempts = 30 // 60s max
+
+          while (attempts < maxAttempts && processingRef.current) {
+            await new Promise(r => setTimeout(r, 2000))
+            attempts++
+
+            const pollRes = await fetch(`/api/faceswap?job_id=${jobId}`)
+            if (!pollRes.ok) break
+
+            const pollData = await pollRes.json()
+            console.log('[RunPod] Poll status:', pollData.status)
+
+            if (pollData.status === 'COMPLETED' && pollData.output?.output_image) {
+              setLatestFrame(pollData.output.output_image)
+              break
+            } else if (pollData.status === 'FAILED') {
+              console.error('[RunPod] Job échoué:', pollData)
+              break
+            }
+          }
+        } else {
+          console.error('[RunPod] Réponse inattendue:', JSON.stringify(data).slice(0, 200))
+        }
       }
     } catch (err) {
-      console.error('[fal.ai] Exception:', err)
+      console.error('[RunPod] Exception:', err)
     }
 
     isProcessingFrameRef.current = false
