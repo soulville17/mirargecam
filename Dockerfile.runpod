@@ -1,36 +1,38 @@
-FROM python:3.10-slim
+# Base image RunPod avec CUDA 11.8 + Python 3.10
+FROM runpod/pytorch:2.1.0-py3.10-cuda11.8.0-dnn8.7-ubuntu22.04
 
-# Install system dependencies
+# Éviter les prompts interactifs
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Dépendances système
 RUN apt-get update && apt-get install -y \
-    git \
     wget \
-    ffmpeg \
     libgl1-mesa-glx \
     libglib2.0-0 \
-    libsm6 \
-    libxext6 \
-    libxrender-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
+# Dépendances Python
 RUN pip install --no-cache-dir \
     runpod \
     opencv-python-headless \
     numpy \
     onnxruntime-gpu \
     insightface \
-    pillow \
-    requests
+    pillow
 
-# Create workspace
-WORKDIR /workspace
+# Dossier de travail
+WORKDIR /app
 
-# Download InsightFace models
-RUN mkdir -p /root/.insightface/models && \
-    wget -q https://github.com/deepinsight/insightface/releases/download/v0.7/inswapper_128.onnx -O /root/.insightface/models/inswapper_128.onnx
+# Télécharger le modèle InsightFace inswapper_128
+RUN mkdir -p /app/models && \
+    wget -q "https://huggingface.co/deepinsight/inswapper/resolve/main/inswapper_128.onnx" \
+    -O /app/models/inswapper_128.onnx
 
-# Copy handler
-COPY runpod_handler.py /workspace/handler.py
+# Pré-télécharger le modèle d'analyse de visage buffalo_l
+RUN python -c "from insightface.app import FaceAnalysis; fa = FaceAnalysis(name='buffalo_l', root='/app/insightface'); fa.prepare(ctx_id=-1, det_size=(640,640)); print('buffalo_l téléchargé')"
 
-# Start the handler
-CMD ["python", "-u", "/workspace/handler.py"]
+# Copier le handler
+COPY runpod_handler.py /app/handler.py
+
+# Lancer le handler
+CMD ["python", "-u", "/app/handler.py"]
