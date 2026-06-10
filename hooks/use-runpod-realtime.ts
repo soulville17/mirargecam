@@ -121,6 +121,10 @@ export function useRunPodRealtime() {
               break
             } else if (pollData.status === 'FAILED') {
               console.error('[RunPod] Job échoué:', pollData)
+              // Afficher l'image debug si disponible
+              if (pollData.output?.debug_source_image) {
+                setLatestFrame(pollData.output.debug_source_image)
+              }
               break
             }
           }

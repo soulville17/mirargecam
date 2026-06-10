@@ -56,7 +56,11 @@ def handler(event):
         tgt_faces = fa.get(tgt)
         print(f"[Handler] Visages src: {len(src_faces)}, tgt: {len(tgt_faces)}", flush=True)
 
-        if not src_faces: return {"error": "Pas de visage dans source"}
+        if not src_faces:
+            # Debug: retourner l'image source pour voir ce que le handler reçoit
+            _, buf = cv2.imencode('.jpg', src)
+            debug_b64 = base64.b64encode(buf).decode('utf-8')
+            return {"error": "Pas de visage dans source", "debug_source_image": debug_b64}
         if not tgt_faces: return {"error": "Pas de visage dans cible"}
 
         swapper = insightface.model_zoo.get_model(INSWAPPER_PATH,
