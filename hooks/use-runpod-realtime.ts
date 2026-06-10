@@ -143,11 +143,20 @@ export function useRunPodRealtime() {
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = stream
         await localVideoRef.current.play()
+        // Attendre que la vidéo ait chargé sa première vraie frame
+        await new Promise<void>(resolve => {
+          const v = localVideoRef.current!
+          if (v.readyState >= 2) { resolve(); return }
+          v.addEventListener('canplay', () => resolve(), { once: true })
+        })
       }
 
       captureCanvasRef.current = document.createElement('canvas')
       captureCanvasRef.current.width = 640
       captureCanvasRef.current.height = 480
+
+      // Petite pause pour s'assurer que la première frame est bien là
+      await new Promise(r => setTimeout(r, 500))
 
       processingRef.current = true
       isProcessingFrameRef.current = false
