@@ -1,24 +1,21 @@
-# Base image NVIDIA officielle avec CUDA 11.8 + cuDNN 8
-FROM nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04
+# Image Python slim — fonctionne partout, swap sur CPU
+FROM python:3.10-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Dépendances système + Python 3.10
+# Dépendances système
 RUN apt-get update && apt-get install -y \
-    python3.10 \
-    python3-pip \
-    curl \
-    ca-certificates \
     libgl1-mesa-glx \
     libglib2.0-0 \
+    libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Dépendances Python
-RUN pip3 install --no-cache-dir \
-    runpod \
+# Dépendances Python (onnxruntime CPU — stable et compatible)
+RUN pip install --no-cache-dir \
+    runpod==1.6.2 \
     opencv-python-headless \
     numpy \
-    onnxruntime-gpu \
+    onnxruntime \
     insightface \
     pillow
 
@@ -29,7 +26,4 @@ RUN mkdir -p /app/models /app/insightface
 # Copier le handler
 COPY runpod_handler.py /app/handler.py
 
-# Le modèle inswapper_128.onnx sera téléchargé au premier démarrage
-# (dans le handler, fonction load_models)
-
-CMD ["python3", "-u", "/app/handler.py"]
+CMD ["python", "-u", "/app/handler.py"]

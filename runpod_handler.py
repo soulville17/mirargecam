@@ -61,14 +61,14 @@ def load_models():
     face_analyser = FaceAnalysis(
         name='buffalo_l',
         root=INSIGHTFACE_ROOT,
-        providers=['CUDAExecutionProvider', 'CPUExecutionProvider']
+        providers=['CPUExecutionProvider']
     )
-    face_analyser.prepare(ctx_id=0, det_size=(640, 640))
+    face_analyser.prepare(ctx_id=-1, det_size=(640, 640))
 
     # Modèle de swap
     face_swapper = insightface.model_zoo.get_model(
         INSWAPPER_PATH,
-        providers=['CUDAExecutionProvider', 'CPUExecutionProvider']
+        providers=['CPUExecutionProvider']
     )
 
     print("[MirageCam] Modèles chargés avec succès")
