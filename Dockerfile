@@ -12,14 +12,10 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Dépendances Python (CPU — stable et compatible partout)
-RUN pip install --no-cache-dir \
-    runpod==1.6.2 \
-    opencv-python-headless \
-    numpy \
-    onnxruntime \
-    insightface==0.7.3 \
-    pillow \
-    requests
+RUN pip install --no-cache-dir numpy pillow requests opencv-python-headless
+RUN pip install --no-cache-dir onnxruntime
+RUN pip install --no-cache-dir insightface
+RUN pip install --no-cache-dir runpod
 
 # Dossier de travail
 WORKDIR /app
