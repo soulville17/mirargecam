@@ -57,6 +57,16 @@ export function useRunPodRealtime() {
     isProcessingFrameRef.current = true
 
     ctx.drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height)
+
+    // Vérifier que la frame n'est pas noire (vidéo pas encore prête)
+    const check = ctx.getImageData(0, 0, 20, 20)
+    const hasContent = check.data.some(v => v > 15)
+    if (!hasContent) {
+      isProcessingFrameRef.current = false
+      animFrameRef.current = requestAnimationFrame(processLoop)
+      return
+    }
+
     const frameBase64 = captureCanvas.toDataURL('image/jpeg', 0.85).split(',')[1]
 
     try {
