@@ -47,24 +47,27 @@ def handler(event):
         tgt = b64_to_img(target_b64)
         print(f"[Handler] src shape: {src.shape}, tgt shape: {tgt.shape}", flush=True)
 
-        # Seuil de détection bas (0.3) pour capturer plus de visages
-        fa = FaceAnalysis(name='buffalo_l', root=INSIGHTFACE_ROOT,
-                          providers=['CPUExecutionProvider'])
-        fa.prepare(ctx_id=-1, det_size=(640, 640), det_thresh=0.3)
+        # Utiliser GPU si disponible, sinon CPU
+        import onnxruntime as ort
+        available = ort.get_available_providers()
+        providers = ['CUDAExecutionProvider', 'CPUExecutionProvider'] if 'CUDAExecutionProvider' in available else ['CPUExecutionProvider']
+        print(f"[Handler] Providers: {providers}", flush=True)
+
+        fa = FaceAnalysis(name='buffalo_l', root=INSIGHTFACE_ROOT, providers=providers)
+        fa.prepare(ctx_id=0 if 'CUDAExecutionProvider' in providers else -1,
+                   det_size=(640, 640), det_thresh=0.3)
 
         src_faces = fa.get(src)
         tgt_faces = fa.get(tgt)
         print(f"[Handler] Visages src: {len(src_faces)}, tgt: {len(tgt_faces)}", flush=True)
 
         if not src_faces:
-            # Debug: retourner l'image source pour voir ce que le handler reçoit
             _, buf = cv2.imencode('.jpg', src)
             debug_b64 = base64.b64encode(buf).decode('utf-8')
             return {"error": "Pas de visage dans source", "debug_source_image": debug_b64}
         if not tgt_faces: return {"error": "Pas de visage dans cible"}
 
-        swapper = insightface.model_zoo.get_model(INSWAPPER_PATH,
-                  providers=['CPUExecutionProvider'])
+        swapper = insightface.model_zoo.get_model(INSWAPPER_PATH, providers=providers)
         result = swapper.get(tgt, tgt_faces[0], src_faces[0], paste_back=True)
 
         _, buf = cv2.imencode('.jpg', result, [cv2.IMWRITE_JPEG_QUALITY, 90])
