@@ -51,6 +51,15 @@ RUN cd /app/LivePortrait && \
 WORKDIR /app
 RUN mkdir -p /app/pretrained_weights /app/insightface
 
+# ── Télécharger les modèles LivePortrait dans l'image (pas de download au démarrage) ──
+RUN python3.10 -c "\
+from huggingface_hub import snapshot_download; \
+snapshot_download(\
+  repo_id='KwaiVGI/LivePortrait', \
+  local_dir='/app/pretrained_weights', \
+  ignore_patterns=['*.git*','README*','*.md','assets/*'] \
+)"
+
 COPY runpod_handler.py /app/handler.py
 
 CMD ["python3.10", "-u", "/app/handler.py"]
