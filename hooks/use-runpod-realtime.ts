@@ -2,12 +2,6 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react'
 
-/**
- * Hook LivePortrait — anime l'avatar avec les expressions du webcam
- * source_image = avatar portrait
- * target_image = webcam frame (pilote l'animation)
- */
-
 export function useRunPodRealtime() {
   const [isConnected, setIsConnected]   = useState(false)
   const [isConnecting, setIsConnecting] = useState(false)
@@ -28,7 +22,6 @@ export function useRunPodRealtime() {
   const captureCanvasRef    = useRef<HTMLCanvasElement | null>(null)
   const fpsCounterRef       = useRef({ frames: 0, lastTime: Date.now() })
 
-  // ── Charge l'avatar en base64 ──────────────────────────────────────────
   const fetchAvatarBase64 = useCallback(async (url: string): Promise<string> => {
     const res = await fetch(url)
     const blob = await res.blob()
@@ -40,11 +33,9 @@ export function useRunPodRealtime() {
     })
   }, [])
 
-  // ── Boucle principale ──────────────────────────────────────────────────
   const processLoop = useCallback(async () => {
     if (!processingRef.current) return
 
-    // Attendre que le job précédent soit terminé
     if (isProcessingRef.current) {
       animFrameRef.current = requestAnimationFrame(processLoop)
       return
@@ -64,10 +55,8 @@ export function useRunPodRealtime() {
 
     isProcessingRef.current = true
 
-    // Capturer la frame webcam
     ctx.drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height)
 
-    // Vérifier que la frame n'est pas noire
     const check = ctx.getImageData(0, 0, 20, 20)
     if (!check.data.some(v => v > 15)) {
       isProcessingRef.current = false
@@ -75,19 +64,16 @@ export function useRunPodRealtime() {
       return
     }
 
-    // Réduire la résolution pour plus de vitesse (640x360 suffit pour LivePortrait)
     const frameBase64 = captureCanvas.toDataURL('image/jpeg', 0.85).split(',')[1]
     const avatarB64   = avatarBase64Ref.current || ''
 
     try {
-      // 1. Soumettre le job
       const res = await fetch('/api/faceswap', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          source_image: avatarB64,    // avatar = portrait à animer
-          target_image: frameBase64,  // webcam = pilote l'animation
-          mode: 'async',
+          source_image: `data:image/jpeg;base64,${avatarB64}`,
+          target_image: `data:image/jpeg;base64,${frameBase64}`,
         }),
       })
 
@@ -98,51 +84,19 @@ export function useRunPodRealtime() {
           setIsConnected(false)
           return
         }
-        console.error('[LivePortrait] Erreur POST:', res.status)
+        console.error('[FaceSwap] Erreur POST:', res.status)
       } else {
         const data = await res.json()
-
-        // Réponse directe (sync)
         if (data.output_image) {
           setLatestFrame(data.output_image)
           updateFps()
           if (data.processing_time) setProcessingMs(data.processing_time)
-        }
-        // Réponse async → polling court
-        else if (data.job_id) {
-          const jobId = data.job_id
-          let attempts = 0
-          const maxAttempts = 60  // 120s max
-
-          while (attempts < maxAttempts && processingRef.current) {
-            await new Promise(r => setTimeout(r, 1000))  // poll toutes les 1s
-            attempts++
-
-            const pollRes = await fetch(`/api/faceswap?job_id=${jobId}`)
-            if (!pollRes.ok) break
-
-            const pollData = await pollRes.json()
-            console.log('[LivePortrait] Status:', pollData.status, `(${attempts}s)`)
-
-            if (pollData.status === 'COMPLETED') {
-              const out = pollData.output
-              if (out?.output_image) {
-                setLatestFrame(out.output_image)
-                updateFps()
-                if (out.processing_time) setProcessingMs(out.processing_time)
-              }
-              break
-            } else if (pollData.status === 'FAILED') {
-              console.error('[LivePortrait] Job échoué:', pollData.error || pollData)
-              break
-            }
-          }
-        } else {
-          console.error('[LivePortrait] Réponse inattendue:', JSON.stringify(data).slice(0, 200))
+        } else if (data.error) {
+          console.error('[FaceSwap] Erreur:', data.error)
         }
       }
     } catch (err) {
-      console.error('[LivePortrait] Exception:', err)
+      console.error('[FaceSwap] Exception:', err)
     }
 
     isProcessingRef.current = false
@@ -164,7 +118,6 @@ export function useRunPodRealtime() {
     }
   }, [])
 
-  // ── Connect ────────────────────────────────────────────────────────────
   const connect = useCallback(async (avatarImageUrl: string) => {
     try {
       setIsConnecting(true)
@@ -204,13 +157,12 @@ export function useRunPodRealtime() {
       animFrameRef.current = requestAnimationFrame(processLoop)
 
     } catch (err: any) {
-      console.error('[LivePortrait] connect error:', err)
+      console.error('[FaceSwap] connect error:', err)
       setError(err.message || 'Erreur de connexion')
       setIsConnecting(false)
     }
   }, [fetchAvatarBase64, processLoop])
 
-  // ── Disconnect ─────────────────────────────────────────────────────────
   const disconnect = useCallback(() => {
     processingRef.current   = false
     isProcessingRef.current = false
