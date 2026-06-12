@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import * as fal from "@fal-ai/client";
+import { fal } from "@fal-ai/client";
 
 export const maxDuration = 60;
 export const runtime = "nodejs";
@@ -28,11 +28,8 @@ export async function POST(request: NextRequest) {
     const sourceB64 = source_image.includes(",") ? source_image.split(",")[1] : source_image;
     const targetB64 = target_image.includes(",") ? target_image.split(",")[1] : target_image;
 
-    const sourceBuffer = Buffer.from(sourceB64, "base64");
-    const targetBuffer = Buffer.from(targetB64, "base64");
-
-    const sourceBlob = new Blob([sourceBuffer], { type: "image/jpeg" });
-    const targetBlob = new Blob([targetBuffer], { type: "image/jpeg" });
+    const sourceBlob = new Blob([Buffer.from(sourceB64, "base64")], { type: "image/jpeg" });
+    const targetBlob = new Blob([Buffer.from(targetB64, "base64")], { type: "image/jpeg" });
 
     const [sourceUrl, targetUrl] = await Promise.all([
       fal.storage.upload(sourceBlob),
