@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 
 export const maxDuration = 60;
 export const runtime = "nodejs";
@@ -8,12 +7,6 @@ const FAL_KEY = process.env.FAL_KEY;
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json({ error: "Non autorise" }, { status: 401 });
-    }
-
     if (!FAL_KEY) {
       return NextResponse.json({ error: "FAL_KEY non configure" }, { status: 500 });
     }
