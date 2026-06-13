@@ -17,10 +17,7 @@ export async function POST(request: NextRequest) {
     const { source_image, target_image } = body;
 
     if (!source_image || !target_image) {
-      return NextResponse.json(
-        { error: "source_image et target_image sont requis" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Images manquantes" }, { status: 400 });
     }
 
     const start = Date.now();
@@ -28,28 +25,35 @@ export async function POST(request: NextRequest) {
     const sourceB64 = source_image.includes(",") ? source_image.split(",")[1] : source_image;
     const targetB64 = target_image.includes(",") ? target_image.split(",")[1] : target_image;
 
-    const sourceBlob = new Blob([Buffer.from(sourceB64, "base64")], { type: "image/jpeg" });
-    const targetBlob = new Blob([Buffer.from(targetB64, "base64")], { type: "image/jpeg" });
+    let sourceUrl: string;
+    let targetUrl: string;
 
-    const [sourceUrl, targetUrl] = await Promise.all([
-      fal.storage.upload(sourceBlob),
-      fal.storage.upload(targetBlob),
-    ]);
+    try {
+      const sourceBlob = new Blob([Buffer.from(sourceB64, "base64")], { type: "image/jpeg" });
+      const targetBlob = new Blob([Buffer.from(targetB64, "base64")], { type: "image/jpeg" });
+      [sourceUrl, targetUrl] = await Promise.all([
+        fal.storage.upload(sourceBlob),
+        fal.storage.upload(targetBlob),
+      ]);
+    } catch (uploadError: any) {
+      return NextResponse.json({ error: "Upload echoue", details: uploadError.message }, { status: 500 });
+    }
 
-    const result = await fal.subscribe("fal-ai/face-swap", {
-      input: {
-        base_image_url: sourceUrl,
-        swap_image_url: targetUrl,
-      },
-    }) as any;
+    let result: any;
+    try {
+      result = await fal.subscribe("fal-ai/face-swap", {
+        input: { base_image_url: sourceUrl, swap_image_url: targetUrl },
+      });
+    } catch (falError: any) {
+      return NextResponse.json({ error: "fal.ai echoue", details: falError.message }, { status: 500 });
+    }
 
     const imageUrl = result?.data?.image?.url || result?.image?.url;
     if (!imageUrl) {
-      return NextResponse.json({ error: "Pas d'image dans la reponse" }, { status: 500 });
+      return NextResponse.json({ error: "Pas d image", raw: JSON.stringify(result).slice(0, 300) }, { status: 500 });
     }
 
-    const imgResponse = await fetch(imageUrl);
-    const imgBuffer = await imgResponse.arrayBuffer();
+    const imgBuffer = await (await fetch(imageUrl)).arrayBuffer();
     const base64 = Buffer.from(imgBuffer).toString("base64");
 
     return NextResponse.json({
@@ -57,11 +61,7 @@ export async function POST(request: NextRequest) {
       output_image: base64,
       processing_time: Date.now() - start,
     });
-  } catch (error) {
-    console.error("[FaceSwap API Error]", error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Erreur serveur" },
-      { status: 500 }
-    );
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message || "Erreur serveur" }, { status: 500 });
   }
 }
