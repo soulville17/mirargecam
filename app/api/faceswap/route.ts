@@ -13,7 +13,7 @@ async function uploadToSupabase(supabase: any, buffer: Buffer, filename: string)
     .from('swap-temp')
     .upload(filename, buffer, {
       contentType: 'image/jpeg',
-      upsert: true,
+      
     });
 
   if (error) throw new Error(`Supabase upload failed: ${error.message}`);
