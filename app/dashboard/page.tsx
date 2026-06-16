@@ -208,8 +208,8 @@ export default function DashboardPage() {
         </div>
         <div className="flex items-center gap-3">
           <div className={`px-3 py-2 rounded-lg flex items-center gap-2 ${
-            processingMode === 'local' 
-              ? 'bg-green-500/10 border border-green-500/30' 
+            processingMode === 'local'
+              ? 'bg-green-500/10 border border-green-500/30'
               : 'bg-blue-500/10 border border-blue-500/30'
           }`}>
             {processingMode === 'local' ? (
@@ -243,7 +243,7 @@ export default function DashboardPage() {
             </div>
           </div>
           <div className="relative">
-            <button 
+            <button
               onClick={() => setShowModeSettings(!showModeSettings)}
               className="p-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
             >
@@ -278,8 +278,8 @@ export default function DashboardPage() {
                         key={option.id}
                         onClick={() => handleModeChange(option.id as 'auto' | 'local' | 'cloud')}
                         className={`w-full p-3 rounded-lg text-left transition-all ${
-                          preferences.mode === option.id 
-                            ? 'bg-[#00ff88]/20 border border-[#00ff88]/50' 
+                          preferences.mode === option.id
+                            ? 'bg-[#00ff88]/20 border border-[#00ff88]/50'
                             : 'bg-white/5 border border-transparent hover:bg-white/10'
                         }`}
                       >
@@ -341,6 +341,10 @@ export default function DashboardPage() {
           </div>
           <div className="relative aspect-video bg-[#0a0a0a]">
             <video ref={remoteVideoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+            {/* Cache le filigrane Decart AI */}
+            <div className="absolute inset-0 pointer-events-none">
+              <div className="absolute bg-black" style={{ top: '45%', left: '5%', width: '28%', height: '12%' }} />
+            </div>
             <div className="absolute bottom-3 right-3 bg-black/70 backdrop-blur-md text-white text-xs px-3 py-1 rounded-md flex items-center gap-1.5 z-20">
               <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
               MirageCam • Cloud
