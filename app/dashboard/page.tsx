@@ -341,9 +341,9 @@ export default function DashboardPage() {
           </div>
           <div className="relative aspect-video bg-[#0a0a0a]">
             <video ref={remoteVideoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
-            {/* Cache le filigrane Decart AI */}
+            {/* Cache le filigrane Decart AI avec flou */}
             <div className="absolute inset-0 pointer-events-none">
-              <div className="absolute bg-black" style={{ top: '45%', left: '5%', width: '28%', height: '12%' }} />
+              <div className="absolute" style={{ top: '40%', left: '3%', width: '52%', height: '16%', backdropFilter: 'blur(18px)', WebkitBackdropFilter: 'blur(18px)' }} />
             </div>
             <div className="absolute bottom-3 right-3 bg-black/70 backdrop-blur-md text-white text-xs px-3 py-1 rounded-md flex items-center gap-1.5 z-20">
               <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
