@@ -19,7 +19,7 @@ export async function GET() {
     const client = createDecartClient({ apiKey })
 
     const token = await client.tokens.create({
-      expiresIn: 600, // 10 minutes
+      expiresIn: 600,
       allowedModels: ['lucy-2.1'],
     })
 
