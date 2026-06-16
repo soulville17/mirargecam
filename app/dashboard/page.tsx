@@ -28,6 +28,7 @@ export default function DashboardPage() {
   const [pointsUsed, setPointsUsed] = useState(0)
   const [isSyncingPoints, setIsSyncingPoints] = useState(false)
 
+  // Nouveau: Detection hardware et mode de traitement
   const [hardware, setHardware] = useState<HardwareCapabilities | null>(null)
   const [preferences, setPreferences] = useState<UserProcessingPreferences>(loadProcessingPreferences())
   const [processingMode, setProcessingMode] = useState<'local' | 'cloud'>('cloud')
@@ -39,18 +40,24 @@ export default function DashboardPage() {
     isConnected,
     isConnecting,
     error,
+    latestFrame,
     localVideoRef,
     remoteVideoRef,
+    remoteCanvasRef,
     connect,
     disconnect,
+    updateAvatar,
   } = useLucy21() as any
 
   const supabase = createBrowserClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
+  // Detecter le hardware au montage
   useEffect(() => {
     async function detectHardware() {
       const caps = await detectHardwareCapabilities()
       setHardware(caps)
+      
+      // Si PC gamer detecte, forcer le mode local obligatoirement
       if (caps.isGamingPC) {
         setProcessingMode('local')
         const forcedPrefs = { ...preferences, mode: 'local' as const }
@@ -58,6 +65,7 @@ export default function DashboardPage() {
         saveProcessingPreferences(forcedPrefs)
         setStats(prev => ({ ...prev, resolution: caps.gpuTier === 'high' ? '1080p' : '720p', fps: caps.gpuTier === 'high' ? 30 : 25 }))
       } else {
+        // PC classique: determiner le mode optimal (cloud par defaut)
         const mode = determineProcessingMode(caps, preferences, networkQuality)
         setProcessingMode(mode.mode)
         setStats(prev => ({ ...prev, resolution: mode.resolution, fps: mode.fps }))
@@ -66,6 +74,7 @@ export default function DashboardPage() {
     detectHardware()
   }, [networkQuality])
 
+  // Surveiller la qualite reseau
   useEffect(() => {
     if ('connection' in navigator) {
       const connection = (navigator as Navigator & { connection?: { effectiveType: string; addEventListener?: (type: string, listener: () => void) => void; removeEventListener?: (type: string, listener: () => void) => void } }).connection
@@ -83,27 +92,35 @@ export default function DashboardPage() {
     }
   }, [])
 
+  // Load user data
   useEffect(() => {
     const loadData = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
+
       setUserId(user.id)
+
+      // MODE TEST — points illimités, API désactivée
       setUserPoints(999999)
       setMaxPoints(999999)
+
       const { data: avatarsData } = await supabase
         .from('user_avatars')
         .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
+
       if (avatarsData && avatarsData.length > 0) {
         setAvatars(avatarsData)
         const activeAvatar = avatarsData.find(a => a.is_active)
         if (activeAvatar) setSelectedAvatar(activeAvatar)
       }
     }
+
     loadData()
   }, [])
 
+  // Track points usage en temps reel (localement)
   useEffect(() => {
     if (!isConnected) return
     const interval = setInterval(() => {
@@ -111,22 +128,31 @@ export default function DashboardPage() {
       setPointsUsed(prev => prev + POINTS_PER_SECOND)
       setUserPoints(prev => {
         const newPoints = Math.max(0, prev - POINTS_PER_SECOND)
-        if (newPoints === 0) handleStopSwapAndSave()
+        if (newPoints === 0) {
+          // Plus de points - arreter le swap et sauvegarder
+          handleStopSwapAndSave()
+        }
         return newPoints
       })
     }, 1000)
     return () => clearInterval(interval)
   }, [isConnected])
 
+  // Fonction pour arreter le swap et sauvegarder les points
   const handleStopSwapAndSave = async () => {
     disconnect()
+    
+    // Sauvegarder les points utilises dans Supabase
     if (pointsUsed > 0 && !isSyncingPoints) {
       setIsSyncingPoints(true)
       try {
         const res = await fetch('/api/points', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ pointsToDeduct: pointsUsed, sessionDuration: duration })
+          body: JSON.stringify({ 
+            pointsToDeduct: pointsUsed,
+            sessionDuration: duration 
+          })
         })
         const data = await res.json()
         if (data.success) {
@@ -139,22 +165,32 @@ export default function DashboardPage() {
         setIsSyncingPoints(false)
       }
     }
+    
+    // Reset les compteurs
     setPointsUsed(0)
     setDuration(0)
   }
 
+  // === TRACKING UTILISATEURS ACTIFS ===
   useEffect(() => {
     const trackActivity = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
-      await supabase.from('user_activity').upsert({
-        user_id: user.id,
-        last_active: new Date().toISOString(),
-        current_page: window.location.pathname,
-      }, { onConflict: 'user_id' })
+
+      await supabase
+        .from('user_activity')
+        .upsert({
+          user_id: user.id,
+          last_active: new Date().toISOString(),
+          current_page: window.location.pathname,
+        }, { 
+          onConflict: 'user_id' 
+        })
     }
+
     trackActivity()
     const interval = setInterval(trackActivity, 30000)
+
     return () => clearInterval(interval)
   }, [])
 
@@ -169,18 +205,32 @@ export default function DashboardPage() {
 
   const handleSelectAvatar = async (avatar: Avatar) => {
     setSelectedAvatar(avatar)
+
     if (userId) {
       await supabase.from('user_avatars').update({ is_active: false }).eq('user_id', userId)
       await supabase.from('user_avatars').update({ is_active: true }).eq('id', avatar.id)
       setAvatars(prev => prev.map(a => ({ ...a, is_active: a.id === avatar.id })))
     }
+
+    if (isConnected) {
+      try {
+        await updateAvatar(avatar.url)
+      } catch (err) {
+        console.error(err)
+      }
+    }
   }
 
   const handleModeChange = useCallback((mode: 'auto' | 'local' | 'cloud') => {
-    if (hardware?.isGamingPC) return
+    // Si PC gamer, ignorer tout changement et rester en local
+    if (hardware?.isGamingPC) {
+      return
+    }
+    
     const newPrefs = { ...preferences, mode }
     setPreferences(newPrefs)
     saveProcessingPreferences(newPrefs)
+    
     if (hardware) {
       const result = determineProcessingMode(hardware, newPrefs, networkQuality)
       setProcessingMode(result.mode)
@@ -196,6 +246,7 @@ export default function DashboardPage() {
 
   return (
     <div className="p-6 space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
@@ -207,9 +258,10 @@ export default function DashboardPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          {/* Mode Indicator */}
           <div className={`px-3 py-2 rounded-lg flex items-center gap-2 ${
-            processingMode === 'local'
-              ? 'bg-green-500/10 border border-green-500/30'
+            processingMode === 'local' 
+              ? 'bg-green-500/10 border border-green-500/30' 
               : 'bg-blue-500/10 border border-blue-500/30'
           }`}>
             {processingMode === 'local' ? (
@@ -223,6 +275,7 @@ export default function DashboardPage() {
               {processingMode === 'local' ? 'LOCAL' : 'CLOUD'}
             </span>
           </div>
+
           <div className="bg-[#1a1a1a] border border-[#333] rounded-lg px-4 py-2 flex items-center gap-2">
             <Coins className="w-4 h-4 text-yellow-500" />
             <span className="text-white font-bold">{userPoints.toLocaleString()}</span>
@@ -231,6 +284,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* Hardware Detection Banner */}
       {hardware?.isGamingPC && (
         <div className="bg-gradient-to-r from-green-500/10 to-transparent border border-green-500/30 rounded-xl p-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -243,15 +297,18 @@ export default function DashboardPage() {
             </div>
           </div>
           <div className="relative">
-            <button
+            <button 
               onClick={() => setShowModeSettings(!showModeSettings)}
               className="p-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
             >
               <Settings className="w-5 h-5 text-white/60" />
             </button>
+            
             {showModeSettings && (
               <div className="absolute top-full right-0 mt-2 w-64 p-4 rounded-xl bg-[#111] border border-[#333] z-50">
                 <h4 className="text-sm font-medium text-white mb-3">Mode de traitement</h4>
+                
+                {/* PC Gamer: Afficher uniquement le mode local force */}
                 {hardware?.isGamingPC ? (
                   <div className="space-y-3">
                     <div className="p-3 rounded-lg bg-green-500/20 border border-green-500/50">
@@ -269,6 +326,7 @@ export default function DashboardPage() {
                     </div>
                   </div>
                 ) : (
+                  /* PC classique: Afficher Auto et Cloud uniquement */
                   <div className="space-y-2">
                     {[
                       { id: 'auto', label: 'Automatique', desc: 'Choisit le meilleur mode' },
@@ -278,8 +336,8 @@ export default function DashboardPage() {
                         key={option.id}
                         onClick={() => handleModeChange(option.id as 'auto' | 'local' | 'cloud')}
                         className={`w-full p-3 rounded-lg text-left transition-all ${
-                          preferences.mode === option.id
-                            ? 'bg-[#00ff88]/20 border border-[#00ff88]/50'
+                          preferences.mode === option.id 
+                            ? 'bg-[#00ff88]/20 border border-[#00ff88]/50' 
                             : 'bg-white/5 border border-transparent hover:bg-white/10'
                         }`}
                       >
@@ -302,6 +360,7 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {/* Video Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-[#111] border border-[#222] rounded-xl overflow-hidden">
           <div className="bg-[#0a0a0a] px-4 py-2 flex items-center gap-2 border-b border-[#222]">
@@ -339,22 +398,22 @@ export default function DashboardPage() {
               </div>
             )}
           </div>
+          
           <div className="relative aspect-video bg-[#0a0a0a]">
             <video ref={remoteVideoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
-            {/* Cache le filigrane Decart AI avec flou */}
-            <div className="absolute inset-0 pointer-events-none">
-              <div className="absolute" style={{ top: '40%', left: '3%', width: '52%', height: '16%', backdropFilter: 'blur(18px)', WebkitBackdropFilter: 'blur(18px)' }} />
-            </div>
+
             <div className="absolute bottom-3 right-3 bg-black/70 backdrop-blur-md text-white text-xs px-3 py-1 rounded-md flex items-center gap-1.5 z-20">
               <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-              MirageCam • Cloud
+              MirageCam • {processingMode === 'local' ? 'Local' : 'Cloud'}
             </div>
+
             {!isConnected && (
               <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-500 bg-[#0a0a0a]">
                 <Zap className="w-12 h-12 mb-2 opacity-50" />
                 <p>{isConnecting ? 'Connexion en cours...' : 'Swap inactif'}</p>
               </div>
             )}
+            
             {isConnecting && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/50">
                 <Loader2 className="w-8 h-8 text-[#00ff88] animate-spin" />
@@ -364,6 +423,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* Status Bar */}
       <div className="bg-[#111] border border-[#222] rounded-lg p-4 flex items-center justify-between">
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2">
@@ -380,6 +440,7 @@ export default function DashboardPage() {
             <Coins className="w-4 h-4 text-yellow-500" />
             <span className="text-white">{pointsUsed} pts utilises</span>
           </div>
+          {/* Network Quality */}
           <div className={`flex items-center gap-2 px-2 py-1 rounded ${
             networkQuality === 'good' ? 'bg-green-500/10' :
             networkQuality === 'medium' ? 'bg-yellow-500/10' : 'bg-red-500/10'
@@ -402,6 +463,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* Bouton Swap */}
       <button
         onClick={isConnected ? handleStopSwap : handleStartSwap}
         disabled={!selectedAvatar && !isConnected}
@@ -428,11 +490,12 @@ export default function DashboardPage() {
         ) : (
           <>
             <Zap className="w-5 h-5" />
-            DEMARRER LE SWAP
+            DEMARRER LE SWAP {processingMode === 'local' ? '(LOCAL)' : '(CLOUD)'}
           </>
         )}
       </button>
 
+      {/* Mes Avatars */}
       <div className="bg-[#111] border border-[#222] rounded-xl p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-white font-bold">MES AVATARS</h2>
@@ -441,6 +504,7 @@ export default function DashboardPage() {
             Ajouter
           </a>
         </div>
+
         {avatars.length === 0 ? (
           <div className="text-center py-12">
             <p className="text-gray-400 mb-4">Aucun avatar trouve</p>
