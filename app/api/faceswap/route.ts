@@ -1,25 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fal } from "@fal-ai/client";
-import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 
 export const maxDuration = 60;
 export const runtime = "nodejs";
 
-const SUPABASE_URL = 'https://ojmzqokffbptmcktnwdy.supabase.co'
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9qbXpxb2tmZmJwdG1ja3Rud2R5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzMTAzNTYsImV4cCI6MjA5NDg4NjM1Nn0.e9sk4b_15ge2LIIQwFpXC3n_q48ctu9IJ6oJxV85kgw'
+async function uploadToTmpfiles(buffer: Buffer, filename: string): Promise<string> {
+  const formData = new FormData();
+  const blob = new Blob([buffer], { type: "image/jpeg" });
+  formData.append("file", blob, filename);
 
-async function uploadToSupabase(supabase: any, buffer: Buffer, filename: string): Promise<string> {
-  const { error } = await supabase.storage
-    .from('swap-temp')
-    .upload(filename, buffer, {
-      contentType: 'image/jpeg',
-      
-    });
+  const res = await fetch("https://tmpfiles.org/api/v1/upload", {
+    method: "POST",
+    body: formData,
+  });
 
-  if (error) throw new Error(`Supabase upload failed: ${error.message}`);
+  if (!res.ok) throw new Error(`tmpfiles upload failed: ${res.status}`);
 
-  const { data } = supabase.storage.from('swap-temp').getPublicUrl(filename);
-  return data.publicUrl;
+  const json = await res.json();
+  const pageUrl: string = json?.data?.url;
+  if (!pageUrl) throw new Error("No URL from tmpfiles");
+
+  return pageUrl.replace("https://tmpfiles.org/", "https://tmpfiles.org/dl/");
 }
 
 export async function POST(request: NextRequest) {
@@ -49,14 +50,10 @@ export async function POST(request: NextRequest) {
     const sourceBuffer = Buffer.from(sourceB64, "base64");
     const targetBuffer = Buffer.from(targetB64, "base64");
 
-    const supabase = createSupabaseClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     const ts = Date.now();
-    const sourceFilename = `source_${ts}.jpg`;
-    const targetFilename = `target_${ts}.jpg`;
-
     const [sourceUrl, targetUrl] = await Promise.all([
-      uploadToSupabase(supabase, sourceBuffer, sourceFilename),
-      uploadToSupabase(supabase, targetBuffer, targetFilename),
+      uploadToTmpfiles(sourceBuffer, `source_${ts}.jpg`),
+      uploadToTmpfiles(targetBuffer, `target_${ts}.jpg`),
     ]);
 
     const result = await fal.subscribe("fal-ai/face-swap", {
@@ -65,11 +62,6 @@ export async function POST(request: NextRequest) {
         swap_image_url: targetUrl,
       },
     }) as any;
-
-    Promise.all([
-      supabase.storage.from('swap-temp').remove([sourceFilename]),
-      supabase.storage.from('swap-temp').remove([targetFilename]),
-    ]).catch(() => {});
 
     const imageUrl = result?.data?.image?.url || result?.image?.url;
     if (!imageUrl) {
