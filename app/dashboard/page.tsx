@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import { Camera, Zap, Clock, Coins, Plus, Check, AlertCircle, Loader2, Square, Wifi, WifiOff, Monitor, Cloud, Settings } from 'lucide-react'
 import { useLucy21 } from '@/hooks/use-lucy-21'
+import { useLocalServer } from '@/hooks/use-local-server'
 import { detectHardwareCapabilities, determineProcessingMode, loadProcessingPreferences, saveProcessingPreferences, type HardwareCapabilities, type UserProcessingPreferences } from '@/lib/hardware-detection'
 
 const SUPABASE_URL = 'https://ojmzqokffbptmcktnwdy.supabase.co'
@@ -36,20 +37,41 @@ export default function DashboardPage() {
   const [showModeSettings, setShowModeSettings] = useState(false)
   const [stats, setStats] = useState({ fps: 0, latency: 0, resolution: '720p' })
 
-  const {
-    isConnected,
-    isConnecting,
-    error,
-    latestFrame,
-    localVideoRef,
-    remoteVideoRef,
-    remoteCanvasRef,
-    connect,
-    disconnect,
-    updateAvatar,
-  } = useLucy21() as any
+  const [localServerAvailable, setLocalServerAvailable] = useState<boolean | null>(null)
+
+  const lucy = useLucy21() as any
+  const local = useLocalServer()
+
+  // Choisir le bon hook selon le mode
+  const isLocal = processingMode === 'local' && localServerAvailable === true
+  const isConnected = isLocal ? local.isProcessing : lucy.isConnected
+  const isConnecting = isLocal ? local.status === 'connecting' : lucy.isConnecting
+  const error = isLocal ? local.error : lucy.error
+  const localVideoRef = isLocal ? local.localVideoRef : lucy.localVideoRef
+  const remoteVideoRef = lucy.remoteVideoRef
+  const remoteCanvasRef = isLocal ? local.remoteCanvasRef : lucy.remoteCanvasRef
+
+  const connect = async (avatarUrl: string) => {
+    if (isLocal) {
+      await local.connect(avatarUrl)
+    } else {
+      await lucy.connect(avatarUrl)
+    }
+  }
+  const disconnect = () => {
+    local.disconnect()
+    lucy.disconnect()
+  }
+  const updateAvatar = lucy.updateAvatar
 
   const supabase = createBrowserClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+
+  // Detecter si le serveur local est disponible
+  useEffect(() => {
+    local.checkServerAvailable().then(available => {
+      setLocalServerAvailable(available)
+    })
+  }, [])
 
   // Detecter le hardware au montage
   useEffect(() => {
@@ -353,6 +375,21 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {localServerAvailable === true && (
+        <div className="bg-gradient-to-r from-purple-500/10 to-transparent border border-purple-500/30 rounded-xl p-3 flex items-center gap-3">
+          <Monitor className="w-4 h-4 text-purple-400" />
+          <p className="text-sm text-purple-300">Serveur local détecté — traitement sur ton PC, zéro filigrane</p>
+          {!isLocal && (
+            <button
+              onClick={() => { setProcessingMode('local'); setLocalServerAvailable(true) }}
+              className="ml-auto text-xs bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/40 text-purple-300 px-3 py-1 rounded-lg transition-colors"
+            >
+              Utiliser le mode local
+            </button>
+          )}
+        </div>
+      )}
+
       {error && (
         <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4 flex items-center gap-3">
           <AlertCircle className="w-5 h-5 text-red-500" />
@@ -400,11 +437,15 @@ export default function DashboardPage() {
           </div>
           
           <div className="relative aspect-video bg-[#0a0a0a]">
-            <video ref={remoteVideoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+            {isLocal ? (
+              <canvas ref={local.remoteCanvasRef} className="w-full h-full object-cover" />
+            ) : (
+              <video ref={remoteVideoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+            )}
 
             <div className="absolute bottom-3 right-3 bg-black/70 backdrop-blur-md text-white text-xs px-3 py-1 rounded-md flex items-center gap-1.5 z-20">
               <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-              MirageCam • {processingMode === 'local' ? 'Local' : 'Cloud'}
+              MirageCam • {isLocal ? 'Local' : 'Cloud'}
             </div>
 
             {!isConnected && (
