@@ -2,8 +2,8 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react'
 
-const LOCAL_SERVER_URL = 'ws://127.0.0.1:7860/ws'
-const LOCAL_HEALTH_URL = 'http://127.0.0.1:7860/health'
+const LOCAL_SERVER_URL = 'ws://localhost:7860/ws'
+const LOCAL_HEALTH_URL = 'http://localhost:7860/health'
 
 export type LocalServerStatus = 'disconnected' | 'connecting' | 'connected' | 'error' | 'no_server'
 
