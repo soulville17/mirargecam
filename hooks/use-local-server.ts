@@ -11,6 +11,7 @@ export function useLocalServer() {
   const [status, setStatus] = useState<LocalServerStatus>('disconnected')
   const [isProcessing, setIsProcessing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [availableEngines, setAvailableEngines] = useState<string[]>([])
 
   const wsRef = useRef<WebSocket | null>(null)
   const localVideoRef = useRef<HTMLVideoElement>(null)
@@ -24,7 +25,12 @@ export function useLocalServer() {
   const checkServerAvailable = useCallback(async (): Promise<boolean> => {
     try {
       const res = await fetch(LOCAL_HEALTH_URL, { signal: AbortSignal.timeout(2000) })
-      return res.ok
+      if (res.ok) {
+        const data = await res.json()
+        setAvailableEngines(data.available_engines || [])
+        return true
+      }
+      return false
     } catch {
       return false
     }
@@ -74,7 +80,7 @@ export function useLocalServer() {
     animFrameRef.current = requestAnimationFrame(sendFrame)
   }, [])
 
-  const connect = useCallback(async (avatarImageUrl: string) => {
+  const connect = useCallback(async (avatarImageUrl: string, engineType: 'liveportrait' | 'insightface' = 'liveportrait') => {
     disconnect()
     setStatus('connecting')
     setError(null)
@@ -111,7 +117,7 @@ export function useLocalServer() {
       const avatarBlob = await avatarRes.blob()
       const buf = await avatarBlob.arrayBuffer()
       const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)))
-      ws.send(JSON.stringify({ type: 'avatar', data: b64 }))
+      ws.send(JSON.stringify({ type: 'avatar', data: b64, engine: engineType }))
     }
 
     ws.onmessage = (event) => {
@@ -151,6 +157,7 @@ export function useLocalServer() {
     status,
     isProcessing,
     error,
+    availableEngines,
     localVideoRef,
     remoteCanvasRef,
     connect,

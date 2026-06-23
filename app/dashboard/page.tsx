@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
-import { Camera, Zap, Clock, Coins, Plus, Check, AlertCircle, Loader2, Square, Wifi, WifiOff, Monitor, Cloud, Settings } from 'lucide-react'
+import { Camera, Zap, Clock, Coins, Plus, Check, AlertCircle, Loader2, Square, Wifi, WifiOff, Monitor, Cloud, Settings, Sparkles } from 'lucide-react'
 import { useLucy21 } from '@/hooks/use-lucy-21'
 import { useLocalServer } from '@/hooks/use-local-server'
 import { detectHardwareCapabilities, determineProcessingMode, loadProcessingPreferences, saveProcessingPreferences, type HardwareCapabilities, type UserProcessingPreferences } from '@/lib/hardware-detection'
@@ -11,6 +11,25 @@ const SUPABASE_URL = 'https://ojmzqokffbptmcktnwdy.supabase.co'
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9qbXpxb2tmZmJwdG1ja3Rud2R5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzMTAzNTYsImV4cCI6MjA5NDg4NjM1Nn0.e9sk4b_15ge2LIIQwFpXC3n_q48ctu9IJ6oJxV85kgw'
 
 const POINTS_PER_SECOND = 2
+
+type EngineMode = 'avatar_complet' | 'echange_visage'
+
+const AVATAR_ENGINE_KEY = 'mirargecam_avatar_engines'
+
+function getAvatarEngine(avatarId: string): EngineMode {
+  try {
+    const stored = JSON.parse(localStorage.getItem(AVATAR_ENGINE_KEY) || '{}')
+    return stored[avatarId] || 'avatar_complet'
+  } catch { return 'avatar_complet' }
+}
+
+function setAvatarEngine(avatarId: string, mode: EngineMode) {
+  try {
+    const stored = JSON.parse(localStorage.getItem(AVATAR_ENGINE_KEY) || '{}')
+    stored[avatarId] = mode
+    localStorage.setItem(AVATAR_ENGINE_KEY, JSON.stringify(stored))
+  } catch {}
+}
 
 interface Avatar {
   id: string
@@ -38,6 +57,7 @@ export default function DashboardPage() {
   const [stats, setStats] = useState({ fps: 0, latency: 0, resolution: '720p' })
 
   const [localServerAvailable, setLocalServerAvailable] = useState<boolean | null>(null)
+  const [engineMode, setEngineMode] = useState<EngineMode>('avatar_complet')
 
   const lucy = useLucy21() as any
   const local = useLocalServer()
@@ -51,9 +71,12 @@ export default function DashboardPage() {
   const remoteVideoRef = lucy.remoteVideoRef
   const remoteCanvasRef = isLocal ? local.remoteCanvasRef : lucy.remoteCanvasRef
 
+  const filteredAvatars = avatars.filter(a => getAvatarEngine(a.id) === engineMode)
+
   const connect = async (avatarUrl: string) => {
+    const localEngine = engineMode === 'echange_visage' ? 'insightface' : 'liveportrait'
     if (isLocal) {
-      await local.connect(avatarUrl)
+      await local.connect(avatarUrl, localEngine)
     } else {
       await lucy.connect(avatarUrl)
     }
@@ -306,6 +329,67 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* Engine Mode Selector */}
+      <div className="grid grid-cols-2 gap-3">
+        <button
+          onClick={() => { setEngineMode('avatar_complet'); if (isConnected) handleStopSwap() }}
+          className={`relative p-4 rounded-xl border-2 text-left transition-all ${
+            engineMode === 'avatar_complet'
+              ? 'border-[#00ff88] bg-[#00ff88]/10'
+              : 'border-[#333] bg-[#111] hover:border-[#555]'
+          }`}
+        >
+          <div className="flex items-center gap-3 mb-2">
+            <div className={`p-2 rounded-lg ${engineMode === 'avatar_complet' ? 'bg-[#00ff88]/20' : 'bg-white/5'}`}>
+              <Sparkles className={`w-5 h-5 ${engineMode === 'avatar_complet' ? 'text-[#00ff88]' : 'text-white/40'}`} />
+            </div>
+            <div>
+              <p className={`font-bold text-sm ${engineMode === 'avatar_complet' ? 'text-[#00ff88]' : 'text-white'}`}>
+                AVATAR COMPLET
+              </p>
+              <p className="text-xs text-white/40">Corps + visage animé</p>
+            </div>
+            {engineMode === 'avatar_complet' && (
+              <div className="ml-auto w-5 h-5 rounded-full bg-[#00ff88] flex items-center justify-center">
+                <Check className="w-3 h-3 text-black" />
+              </div>
+            )}
+          </div>
+          <p className="text-xs text-white/50">
+            {isLocal ? 'LivePortrait (GPU local)' : 'Decart AI (cloud)'}
+          </p>
+        </button>
+
+        <button
+          onClick={() => { setEngineMode('echange_visage'); if (isConnected) handleStopSwap() }}
+          className={`relative p-4 rounded-xl border-2 text-left transition-all ${
+            engineMode === 'echange_visage'
+              ? 'border-blue-500 bg-blue-500/10'
+              : 'border-[#333] bg-[#111] hover:border-[#555]'
+          }`}
+        >
+          <div className="flex items-center gap-3 mb-2">
+            <div className={`p-2 rounded-lg ${engineMode === 'echange_visage' ? 'bg-blue-500/20' : 'bg-white/5'}`}>
+              <Camera className={`w-5 h-5 ${engineMode === 'echange_visage' ? 'text-blue-400' : 'text-white/40'}`} />
+            </div>
+            <div>
+              <p className={`font-bold text-sm ${engineMode === 'echange_visage' ? 'text-blue-400' : 'text-white'}`}>
+                ÉCHANGE DE VISAGE
+              </p>
+              <p className="text-xs text-white/40">Visage seul remplacé</p>
+            </div>
+            {engineMode === 'echange_visage' && (
+              <div className="ml-auto w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center">
+                <Check className="w-3 h-3 text-white" />
+              </div>
+            )}
+          </div>
+          <p className="text-xs text-white/50">
+            InsightFace {isLocal ? '(GPU local)' : '(cloud)'}
+          </p>
+        </button>
+      </div>
+
       {/* Hardware Detection Banner */}
       {hardware?.isGamingPC && (
         <div className="bg-gradient-to-r from-green-500/10 to-transparent border border-green-500/30 rounded-xl p-4 flex items-center justify-between">
@@ -536,36 +620,47 @@ export default function DashboardPage() {
         )}
       </button>
 
-      {/* Mes Avatars */}
+      {/* Mes Avatars — filtrés par moteur */}
       <div className="bg-[#111] border border-[#222] rounded-xl p-6">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-white font-bold">MES AVATARS</h2>
+          <h2 className="text-white font-bold">
+            MES AVATARS — {engineMode === 'avatar_complet' ? 'COMPLET' : 'VISAGE'}
+          </h2>
           <a href="/dashboard/avatars" className="flex items-center gap-1 text-[#00ff88] hover:underline text-sm">
             <Plus className="w-4 h-4" />
             Ajouter
           </a>
         </div>
 
-        {avatars.length === 0 ? (
+        {filteredAvatars.length === 0 ? (
           <div className="text-center py-12">
-            <p className="text-gray-400 mb-4">Aucun avatar trouve</p>
+            <p className="text-gray-400 mb-2">
+              Aucun avatar {engineMode === 'avatar_complet' ? '"Avatar Complet"' : '"Échange de Visage"'} trouvé
+            </p>
+            <p className="text-gray-500 text-sm mb-4">
+              {engineMode === 'avatar_complet'
+                ? 'Ajoutez un avatar corps entier (personnage en pied)'
+                : 'Ajoutez une photo de visage à échanger'}
+            </p>
             <a href="/dashboard/avatars" className="inline-flex items-center gap-2 bg-[#00ff88] text-black px-4 py-2 rounded-lg font-medium">
-              Creer mon premier avatar
+              Ajouter un avatar
             </a>
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-            {avatars.map((avatar) => (
+            {filteredAvatars.map((avatar) => (
               <button
                 key={avatar.id}
                 onClick={() => handleSelectAvatar(avatar)}
                 className={`relative aspect-square rounded-xl overflow-hidden border-2 transition-all ${
-                  selectedAvatar?.id === avatar.id ? 'border-[#00ff88] shadow-[0_0_20px_rgba(0,255,136,0.3)]' : 'border-[#333] hover:border-[#555]'
+                  selectedAvatar?.id === avatar.id ?
+                    (engineMode === 'avatar_complet' ? 'border-[#00ff88] shadow-[0_0_20px_rgba(0,255,136,0.3)]' : 'border-blue-500 shadow-[0_0_20px_rgba(59,130,246,0.3)]')
+                    : 'border-[#333] hover:border-[#555]'
                 }`}
               >
                 <img src={avatar.url} alt={avatar.name} className="w-full h-full object-cover" />
                 {selectedAvatar?.id === avatar.id && (
-                  <div className="absolute top-2 right-2 w-6 h-6 bg-[#00ff88] rounded-full flex items-center justify-center">
+                  <div className={`absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center ${engineMode === 'avatar_complet' ? 'bg-[#00ff88]' : 'bg-blue-500'}`}>
                     <Check className="w-4 h-4 text-black" />
                   </div>
                 )}

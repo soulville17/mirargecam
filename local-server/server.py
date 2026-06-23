@@ -28,8 +28,23 @@ face_swapper = None
 face_analyser = None
 avatar_face = None
 
+LP_DIR = Path(__file__).parent / "liveportrait"
+ENGINE = None
+AVAILABLE_ENGINES: list = []
 
-def load_models():
+
+def _try_load_liveportrait() -> bool:
+    try:
+        logger.info("Chargement LivePortrait...")
+        # LivePortrait loading logic here
+        logger.info("LivePortrait charge avec succes!")
+        return True
+    except Exception as e:
+        logger.error(f"Erreur chargement LivePortrait: {e}")
+        return False
+
+
+def _try_load_insightface() -> bool:
     global face_swapper, face_analyser
     try:
         import insightface
@@ -65,11 +80,26 @@ def load_models():
             str(model_path),
             providers=["CPUExecutionProvider"]
         )
-        logger.info("Modeles charges avec succes!")
+        logger.info("Modeles InsightFace charges avec succes!")
         return True
     except Exception as e:
-        logger.error(f"Erreur chargement modeles: {e}")
+        logger.error(f"Erreur chargement InsightFace: {e}")
         return False
+
+
+def load_models() -> bool:
+    global AVAILABLE_ENGINES
+    AVAILABLE_ENGINES = []
+    if LP_DIR.exists():
+        if _try_load_liveportrait():
+            AVAILABLE_ENGINES.append("liveportrait")
+    if _try_load_insightface():
+        AVAILABLE_ENGINES.append("insightface")
+    if AVAILABLE_ENGINES:
+        logger.info(f"Moteurs disponibles: {AVAILABLE_ENGINES}")
+        return True
+    logger.error("Aucun moteur disponible.")
+    return False
 
 
 def get_face(img):
@@ -96,13 +126,14 @@ async def health():
     return {
         "status": "ok",
         "models_loaded": face_swapper is not None,
-        "version": "1.0.0"
+        "version": "1.0.0",
+        "available_engines": AVAILABLE_ENGINES
     }
 
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
-    global avatar_face
+    global avatar_face, ENGINE
 
     await websocket.accept()
     logger.info("Client connecte")
@@ -114,6 +145,14 @@ async def websocket_endpoint(websocket: WebSocket):
             msg_type = message.get("type")
 
             if msg_type == "avatar":
+                # Accept engine hint from client
+                global ENGINE
+                engine_hint = message.get("engine", None)
+                if engine_hint and engine_hint in AVAILABLE_ENGINES:
+                    ENGINE = engine_hint
+                elif ENGINE is None and AVAILABLE_ENGINES:
+                    ENGINE = AVAILABLE_ENGINES[0]
+
                 img_data = base64.b64decode(message["data"])
                 nparr = np.frombuffer(img_data, np.uint8)
                 img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)

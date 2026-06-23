@@ -51,6 +51,9 @@ export default function AvatarsPage() {
   // Delete confirmation
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
+  // Engine type for new avatar
+  const [avatarEngineType, setAvatarEngineType] = useState<'avatar_complet' | 'echange_visage'>('avatar_complet')
+
   // Fetch avatars from Supabase
   const fetchAvatars = useCallback(async (uid: string) => {
     const { data, error } = await supabase
@@ -180,14 +183,22 @@ export default function AvatarsPage() {
         return
       }
 
+      // Save engine type to localStorage
+      const avatarId = data.id
+      const engineKey = 'mirargecam_avatar_engines'
+      const stored = JSON.parse(localStorage.getItem(engineKey) || '{}')
+      stored[avatarId] = avatarEngineType
+      localStorage.setItem(engineKey, JSON.stringify(stored))
+
       // Update local state
       setAvatars(prev => [data, ...prev])
-      
+
       // Reset modal
       setIsModalOpen(false)
       setSelectedFile(null)
       setPreviewUrl(null)
       setAvatarName("")
+      setAvatarEngineType('avatar_complet')
 
       toast({ title: 'Avatar cree!', description: `"${avatarName}" a ete ajoute` })
 
@@ -304,6 +315,25 @@ export default function AvatarsPage() {
                 </div>
               )}
 
+              {/* Engine badge */}
+              {(() => {
+                const engineType = (() => {
+                  try {
+                    const stored = JSON.parse(localStorage.getItem('mirargecam_avatar_engines') || '{}')
+                    return stored[avatar.id] || 'avatar_complet'
+                  } catch { return 'avatar_complet' }
+                })()
+                return (
+                  <div className={`absolute top-3 left-3 text-xs font-bold px-2 py-1 rounded-full ${
+                    engineType === 'echange_visage'
+                      ? 'bg-blue-500/80 text-white'
+                      : 'bg-[#00ff88]/80 text-black'
+                  }`}>
+                    {engineType === 'echange_visage' ? 'VISAGE' : 'COMPLET'}
+                  </div>
+                )
+              })()}
+
               {/* Name overlay */}
               <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent p-4">
                 <p className="text-white font-semibold truncate">{avatar.name}</p>
@@ -342,6 +372,41 @@ export default function AvatarsPage() {
                 className="bg-[#1a1a1a] border-white/10 text-white"
                 maxLength={30}
               />
+            </div>
+
+            {/* Engine type selector */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Type d'avatar</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setAvatarEngineType('avatar_complet')}
+                  className={`p-3 rounded-lg border-2 text-left transition-all ${
+                    avatarEngineType === 'avatar_complet'
+                      ? 'border-[#00ff88] bg-[#00ff88]/10'
+                      : 'border-white/10 bg-[#1a1a1a] hover:border-white/20'
+                  }`}
+                >
+                  <p className={`font-bold text-xs ${avatarEngineType === 'avatar_complet' ? 'text-[#00ff88]' : 'text-white'}`}>
+                    AVATAR COMPLET
+                  </p>
+                  <p className="text-xs text-white/40 mt-1">Corps entier (LivePortrait)</p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAvatarEngineType('echange_visage')}
+                  className={`p-3 rounded-lg border-2 text-left transition-all ${
+                    avatarEngineType === 'echange_visage'
+                      ? 'border-blue-500 bg-blue-500/10'
+                      : 'border-white/10 bg-[#1a1a1a] hover:border-white/20'
+                  }`}
+                >
+                  <p className={`font-bold text-xs ${avatarEngineType === 'echange_visage' ? 'text-blue-400' : 'text-white'}`}>
+                    ÉCHANGE DE VISAGE
+                  </p>
+                  <p className="text-xs text-white/40 mt-1">Photo de visage (InsightFace)</p>
+                </button>
+              </div>
             </div>
 
             {/* Upload area */}
