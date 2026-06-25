@@ -241,6 +241,11 @@ export default function DashboardPage() {
 
   const handleStartSwap = async () => {
     if (!selectedAvatar || userPoints < POINTS_PER_SECOND) return
+    // ÉCHANGE DE VISAGE nécessite le serveur local (InsightFace)
+    if (engineMode === 'echange_visage' && !localServerAvailable) {
+      alert('ÉCHANGE DE VISAGE nécessite le serveur local.\nLance start.bat sur ton PC puis reconnecte-toi.')
+      return
+    }
     setDuration(0)
     setPointsUsed(0)
     await connect(selectedAvatar.url)
@@ -384,9 +389,11 @@ export default function DashboardPage() {
               </div>
             )}
           </div>
-          <p className="text-xs text-white/50">
-            InsightFace {isLocal ? '(GPU local)' : '(cloud)'}
-          </p>
+          {localServerAvailable ? (
+            <p className="text-xs text-white/50">InsightFace (GPU local)</p>
+          ) : (
+            <p className="text-xs text-orange-400/70">⚠ Nécessite le serveur local</p>
+          )}
         </button>
       </div>
 
