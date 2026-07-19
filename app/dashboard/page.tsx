@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
-import { Camera, Zap, Clock, Coins, Plus, Check, AlertCircle, Loader2, Square, Wifi, WifiOff, Monitor, Cloud, Settings, Sparkles } from 'lucide-react'
+import { Camera, Zap, Clock, Coins, Plus, Check, AlertCircle, Loader2, Square, Wifi, WifiOff, Monitor, Cloud, Settings, Sparkles, Maximize2, Minimize2, Eye, EyeOff } from 'lucide-react'
 import { useLucy21 } from '@/hooks/use-lucy-21'
 import { useLocalServer } from '@/hooks/use-local-server'
+import { SwapConsent, GenerateNotice } from '@/components/dashboard/swap-consent'
 import { detectHardwareCapabilities, determineProcessingMode, loadProcessingPreferences, saveProcessingPreferences, type HardwareCapabilities, type UserProcessingPreferences } from '@/lib/hardware-detection'
 
 const SUPABASE_URL = 'https://ojmzqokffbptmcktnwdy.supabase.co'
@@ -59,6 +60,54 @@ export default function DashboardPage() {
   const [localServerAvailable, setLocalServerAvailable] = useState<boolean | null>(null)
   const [engineMode, setEngineMode] = useState<EngineMode>('avatar_complet')
 
+  // Preference "Logo MirageCam" (watermark). true = sans logo.
+  // Persistee en localStorage, appliquee a la prochaine connexion du swap.
+  const [noWatermark, setNoWatermark] = useState(false)
+  // Certification d'usage responsable, requise avant le demarrage du swap.
+  const [swapConsent, setSwapConsent] = useState(false)
+
+  // Charger les preferences uniquement apres montage (evite tout mismatch
+  // d'hydratation avec le rendu serveur).
+  useEffect(() => {
+    try {
+      setNoWatermark(localStorage.getItem('mirargecam_no_watermark') === '1')
+      setSwapConsent(localStorage.getItem('mirargecam_swap_consent') === '1')
+    } catch {}
+  }, [])
+
+  const toggleNoWatermark = useCallback(() => {
+    setNoWatermark(prev => {
+      const next = !prev
+      try { localStorage.setItem('mirargecam_no_watermark', next ? '1' : '0') } catch {}
+      return next
+    })
+  }, [])
+
+  const handleConsentChange = useCallback((value: boolean) => {
+    setSwapConsent(value)
+    try { localStorage.setItem('mirargecam_swap_consent', value ? '1' : '0') } catch {}
+  }, [])
+
+  // Plein ecran natif sur la sortie MirageCam (pour capture OBS)
+  const mirageCamRef = useRef<HTMLDivElement | null>(null)
+  const [isCamFullscreen, setIsCamFullscreen] = useState(false)
+
+  const toggleCamFullscreen = useCallback(() => {
+    const el = mirageCamRef.current
+    if (!el) return
+    if (!document.fullscreenElement) {
+      el.requestFullscreen?.().catch(() => {})
+    } else {
+      document.exitFullscreen?.().catch(() => {})
+    }
+  }, [])
+
+  useEffect(() => {
+    const onFsChange = () => setIsCamFullscreen(document.fullscreenElement === mirageCamRef.current)
+    document.addEventListener('fullscreenchange', onFsChange)
+    return () => document.removeEventListener('fullscreenchange', onFsChange)
+  }, [])
+
   const lucy = useLucy21() as any
   const local = useLocalServer()
 
@@ -78,7 +127,7 @@ export default function DashboardPage() {
     if (isLocal) {
       await local.connect(avatarUrl, localEngine)
     } else {
-      await lucy.connect(avatarUrl)
+      await lucy.connect(avatarUrl, { noWatermark })
     }
   }
   const disconnect = () => {
@@ -240,7 +289,7 @@ export default function DashboardPage() {
   }, [])
 
   const handleStartSwap = async () => {
-    if (!selectedAvatar || userPoints < POINTS_PER_SECOND) return
+    if (!selectedAvatar || userPoints < POINTS_PER_SECOND || !swapConsent) return
     // ÉCHANGE DE VISAGE nécessite le serveur local (InsightFace)
     if (engineMode === 'echange_visage' && !localServerAvailable) {
       alert('ÉCHANGE DE VISAGE nécessite le serveur local.\nLance start.bat sur ton PC puis reconnecte-toi.')
@@ -488,8 +537,12 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {/* Main layout : contenu + panneau de reglages */}
+      <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
+      <div className="space-y-6">
+
       {/* Video Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         <div className="bg-[#111] border border-[#222] rounded-xl overflow-hidden">
           <div className="bg-[#0a0a0a] px-4 py-2 flex items-center gap-2 border-b border-[#222]">
             <Camera className="w-4 h-4 text-blue-500" />
@@ -518,20 +571,38 @@ export default function DashboardPage() {
           <div className="bg-[#0a0a0a] px-4 py-2 flex items-center gap-2 border-b border-[#00ff88]/30">
             <Zap className="w-4 h-4 text-[#00ff88]" />
             <span className="text-white font-medium">CAMERA MIRAGECAM</span>
-            {isConnected && (
-              <div className="ml-auto flex items-center gap-2 text-xs">
-                <span className="text-[#00ff88]">{stats.fps} FPS</span>
-                <span className="text-white/40">|</span>
-                <span className="text-white/60">{stats.resolution}</span>
-              </div>
-            )}
+            <div className="ml-auto flex items-center gap-2 text-xs">
+              {isConnected && (
+                <>
+                  <span className="text-[#00ff88]">{stats.fps} FPS</span>
+                  <span className="text-white/40">|</span>
+                  <span className="text-white/60">{stats.resolution}</span>
+                </>
+              )}
+              <button
+                onClick={toggleCamFullscreen}
+                aria-label={isCamFullscreen ? 'Réduire la caméra' : 'Agrandir la caméra'}
+                title={isCamFullscreen ? 'Réduire' : 'Agrandir en plein écran (capture OBS)'}
+                className="flex h-7 w-7 items-center justify-center rounded-md border border-[#00ff88]/30 bg-[#00ff88]/10 text-[#00ff88] transition-colors hover:bg-[#00ff88]/20"
+              >
+                {isCamFullscreen ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+              </button>
+            </div>
           </div>
-          
-          <div className="relative aspect-video bg-[#0a0a0a]">
+
+          <div ref={mirageCamRef} className="relative aspect-video bg-[#0a0a0a]">
             {isLocal ? (
               <canvas ref={local.remoteCanvasRef} className="w-full h-full object-cover" />
             ) : (
-              <video ref={remoteVideoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+              <video
+                ref={remoteVideoRef}
+                data-mirargecam-output="true"
+                autoPlay
+                playsInline
+                muted
+                className="w-full h-full object-cover"
+                style={{ transform: 'scaleX(-1)' }}
+              />
             )}
 
             <div className="absolute bottom-3 right-3 bg-black/70 backdrop-blur-md text-white text-xs px-3 py-1 rounded-md flex items-center gap-1.5 z-20">
@@ -595,17 +666,22 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* Certification d'usage responsable (avant demarrage) */}
+      {!isConnected && (
+        <SwapConsent checked={swapConsent} onChange={handleConsentChange} />
+      )}
+
       {/* Bouton Swap */}
       <button
         onClick={isConnected ? handleStopSwap : handleStartSwap}
-        disabled={!selectedAvatar && !isConnected}
+        disabled={(!selectedAvatar || !swapConsent) && !isConnected}
         className={`w-full py-4 rounded-xl font-bold text-lg transition-all flex items-center justify-center gap-2 ${
           isConnected
             ? 'bg-red-500 hover:bg-red-600 text-white'
             : isConnecting
             ? 'bg-yellow-500 text-black cursor-wait'
-            : selectedAvatar && userPoints >= POINTS_PER_SECOND
-            ? 'bg-[#00ff88] hover:bg-[#00dd77] text-black'
+            : selectedAvatar && userPoints >= POINTS_PER_SECOND && swapConsent
+            ? 'bg-[#00ff88] hover:bg-[#00dd77] text-black shadow-[0_0_40px_rgba(0,255,136,0.25)]'
             : 'bg-gray-700 text-gray-400 cursor-not-allowed'
         }`}
       >
@@ -626,6 +702,8 @@ export default function DashboardPage() {
           </>
         )}
       </button>
+
+      {!isConnected && <GenerateNotice />}
 
       {/* Mes Avatars — filtrés par moteur */}
       <div className="bg-[#111] border border-[#222] rounded-xl p-6">
@@ -678,6 +756,122 @@ export default function DashboardPage() {
             ))}
           </div>
         )}
+      </div>
+
+      </div>
+
+      {/* Panneau de reglages du studio */}
+      <aside className="h-fit space-y-6 rounded-2xl border border-[#222] bg-[#111]/70 p-5 backdrop-blur-xl lg:sticky lg:top-6">
+        <div className="flex items-center gap-2">
+          <Settings className="h-5 w-5 text-[#00ff88]" />
+          <h2 className="text-base font-bold text-white">Réglages du studio</h2>
+        </div>
+
+        {/* Toggle Logo MirageCam (watermark) */}
+        <div className="rounded-xl border border-[#00ff88]/25 bg-[#00ff88]/5 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#00ff88]/15">
+                {noWatermark
+                  ? <EyeOff className="h-5 w-5 text-[#00ff88]" />
+                  : <Eye className="h-5 w-5 text-[#00ff88]" />}
+              </span>
+              <div>
+                <p className="text-sm font-semibold text-white">Logo MirageCam</p>
+                <p className="text-[11px] text-white/50">
+                  {noWatermark ? 'OFF — vidéo sans logo' : 'ON — logo affiché sur la vidéo'}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={toggleNoWatermark}
+              role="switch"
+              aria-checked={!noWatermark}
+              aria-label="Logo MirageCam"
+              className={`relative h-6 w-11 shrink-0 rounded-full transition-colors duration-200 ${
+                !noWatermark ? 'bg-[#00ff88]' : 'bg-white/15'
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform duration-200 ${
+                  !noWatermark ? 'translate-x-5' : 'translate-x-0.5'
+                }`}
+              />
+            </button>
+          </div>
+          {isConnected && (
+            <p className="mt-3 rounded-lg bg-black/40 px-3 py-2 text-[11px] text-yellow-400/90">
+              Prend effet au prochain démarrage du swap.
+            </p>
+          )}
+        </div>
+
+        {/* Mode de traitement */}
+        <div>
+          <p className="mb-2 text-xs font-medium text-white/60">Mode de traitement</p>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => handleModeChange('cloud')}
+              disabled={hardware?.isGamingPC}
+              className={`flex items-center justify-center gap-1.5 rounded-lg border py-2 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                processingMode === 'cloud'
+                  ? 'border-blue-500/50 bg-blue-500/10 text-blue-400'
+                  : 'border-[#333] bg-black/30 text-white/50 hover:border-[#555]'
+              }`}
+            >
+              <Cloud className="h-4 w-4" />
+              Cloud
+            </button>
+            <button
+              onClick={() => { setProcessingMode('local') }}
+              disabled={localServerAvailable !== true}
+              className={`flex items-center justify-center gap-1.5 rounded-lg border py-2 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                processingMode === 'local'
+                  ? 'border-green-500/50 bg-green-500/10 text-green-400'
+                  : 'border-[#333] bg-black/30 text-white/50 hover:border-[#555]'
+              }`}
+            >
+              <Monitor className="h-4 w-4" />
+              Local
+            </button>
+          </div>
+          {hardware?.isGamingPC && (
+            <p className="mt-2 text-[10px] text-green-400/70">
+              PC Gaming détecté — mode local forcé pour des performances optimales.
+            </p>
+          )}
+        </div>
+
+        {/* Sortie video */}
+        <div>
+          <p className="mb-2 text-xs font-medium text-white/60">Sortie vidéo</p>
+          <button
+            onClick={toggleCamFullscreen}
+            className="flex w-full items-center justify-center gap-2 rounded-lg border border-[#333] bg-black/30 py-2 text-xs font-medium text-white/70 transition-colors hover:border-[#00ff88]/40 hover:text-[#00ff88]"
+          >
+            {isCamFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+            {isCamFullscreen ? 'Quitter le plein écran' : 'Plein écran (capture OBS)'}
+          </button>
+        </div>
+
+        {/* Session info */}
+        <div className="space-y-2 rounded-xl border border-[#222] bg-black/30 p-3 text-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-white/50">Durée session</span>
+            <span className="font-medium text-white">{formatDuration(duration)}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-white/50">Points utilisés</span>
+            <span className="font-medium text-white">{pointsUsed} pts</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-white/50">Moteur</span>
+            <span className="font-medium text-white">
+              {engineMode === 'avatar_complet' ? 'Avatar complet' : 'Échange de visage'}
+            </span>
+          </div>
+        </div>
+      </aside>
       </div>
     </div>
   )
